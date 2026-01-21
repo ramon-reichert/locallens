@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/ramon-reichert/locallens/internal/indexer"
 	"github.com/ramon-reichert/locallens/internal/platform/kronk"
 	"github.com/ramon-reichert/locallens/internal/platform/logger"
 )
@@ -36,28 +37,17 @@ func run() error {
 		"embed", paths.Embed.ModelFiles[0],
 	)
 
-	if err := kronk.Init(); err != nil {
-		return fmt.Errorf("kronk init: %w", err)
-	}
-
-	log(ctx, "testing vision model")
-
-	krn, err := kronk.LoadModel(kronk.VisionConfig(paths.Vision))
+	idx, err := indexer.New(indexer.Config{
+		Log:         log,
+		VisionPaths: paths.Vision,
+		EmbedPaths:  paths.Embed,
+	})
 	if err != nil {
-		return fmt.Errorf("load vision model: %w", err)
+		return fmt.Errorf("new indexer: %w", err)
 	}
+	defer idx.Close(ctx)
 
-	defer func() {
-		log(ctx, "unloading vision model")
-		if err := krn.Unload(context.Background()); err != nil {
-			log(ctx, "unload error", "error", err)
-		}
-	}()
-
-	log(ctx, "vision model loaded",
-		"context_window", krn.ModelConfig().ContextWindow,
-		"template", krn.ModelInfo().Template.FileName,
-	)
+	log(ctx, "indexer ready")
 
 	return nil
 }
