@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ramon-reichert/locallens/internal/index"
+	"github.com/ramon-reichert/locallens/internal/service/index"
 )
 
 func TestAddAndGet(t *testing.T) {

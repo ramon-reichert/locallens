@@ -5,16 +5,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ramon-reichert/locallens/internal/embedding"
+	"github.com/ramon-reichert/locallens/internal/service/embedding"
+	"github.com/ramon-reichert/locallens/internal/service/tests/testsboot"
 )
 
 func TestEmbed(t *testing.T) {
+	testsboot.Boot()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
 	e := embedding.New(embedding.Config{
-		Log:   log,
-		Paths: embedPaths,
+		Log:   testsboot.Log,
+		Paths: testsboot.EmbedPaths,
 	})
 	defer e.Unload(ctx)
 
@@ -41,8 +43,9 @@ func TestEmbed(t *testing.T) {
 }
 
 func TestEmbed_NotLoaded(t *testing.T) {
+	testsboot.Boot()
 	e := embedding.New(embedding.Config{
-		Log: log,
+		Log: testsboot.Log,
 	})
 
 	_, err := e.Embed(context.Background(), "any text")
@@ -52,12 +55,13 @@ func TestEmbed_NotLoaded(t *testing.T) {
 }
 
 func TestEmbed_EmptyText(t *testing.T) {
+	testsboot.Boot()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
 	e := embedding.New(embedding.Config{
-		Log:   log,
-		Paths: embedPaths,
+		Log:   testsboot.Log,
+		Paths: testsboot.EmbedPaths,
 	})
 	defer e.Unload(ctx)
 

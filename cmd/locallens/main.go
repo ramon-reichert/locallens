@@ -10,9 +10,9 @@ import (
 
 	kronksdk "github.com/ardanlabs/kronk/sdk/kronk"
 
-	"github.com/ramon-reichert/locallens/internal"
 	"github.com/ramon-reichert/locallens/internal/platform/kronk"
 	"github.com/ramon-reichert/locallens/internal/platform/logger"
+	"github.com/ramon-reichert/locallens/internal/service"
 )
 
 func main() {
@@ -54,7 +54,7 @@ func run() error {
 		return fmt.Errorf("create data dir: %w", err)
 	}
 
-	svc := internal.New(internal.Config{
+	svc := service.New(service.Config{
 		Log:         log,
 		VisionPaths: paths.Vision,
 		EmbedPaths:  paths.Embed,

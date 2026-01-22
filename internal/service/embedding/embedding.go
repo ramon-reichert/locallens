@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/ardanlabs/kronk/sdk/kronk"
 	"github.com/ardanlabs/kronk/sdk/kronk/model"
@@ -51,6 +52,7 @@ func (e *Embedder) Load(ctx context.Context) error {
 		return nil
 	}
 
+	start := time.Now()
 	e.log(ctx, "loading embedding model")
 
 	cfg := model.Config{
@@ -70,6 +72,7 @@ func (e *Embedder) Load(ctx context.Context) error {
 
 	e.krn = krn
 	e.log(ctx, "embedding model loaded",
+		"loading time", time.Since(start),
 		"context_window", krn.ModelConfig().ContextWindow,
 	)
 
@@ -121,6 +124,7 @@ func (e *Embedder) Embed(ctx context.Context, text string) ([]float32, error) {
 		"truncate": true,
 	}
 
+	start := time.Now()
 	resp, err := krn.Embeddings(ctx, data)
 	if err != nil {
 		return nil, fmt.Errorf("embeddings: %w", err)
@@ -130,5 +134,6 @@ func (e *Embedder) Embed(ctx context.Context, text string) ([]float32, error) {
 		return nil, errors.New("no embedding data returned")
 	}
 
+	e.log(ctx, "embedding finished", "embedding time", time.Since(start))
 	return resp.Data[0].Embedding, nil
 }

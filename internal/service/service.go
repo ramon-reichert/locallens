@@ -1,5 +1,5 @@
 // Package internal provides the service orchestrator for LocalLens.
-package internal
+package service
 
 import (
 	"context"
@@ -10,11 +10,11 @@ import (
 
 	"github.com/ardanlabs/kronk/sdk/tools/models"
 
-	"github.com/ramon-reichert/locallens/internal/description"
-	"github.com/ramon-reichert/locallens/internal/embedding"
-	"github.com/ramon-reichert/locallens/internal/index"
 	"github.com/ramon-reichert/locallens/internal/platform/logger"
-	"github.com/ramon-reichert/locallens/internal/search"
+	"github.com/ramon-reichert/locallens/internal/service/description"
+	"github.com/ramon-reichert/locallens/internal/service/embedding"
+	"github.com/ramon-reichert/locallens/internal/service/index"
+	"github.com/ramon-reichert/locallens/internal/service/search"
 )
 
 // Service orchestrates indexing and search operations.
@@ -64,15 +64,13 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string) error {
 	s.log(ctx, "found images", "count", len(images))
 
 	// Phase 1: Describe all images
-	descriptions := make(map[string]string)
+	descriptions := make(map[string]string) // key: image path
 
 	if err := s.describer.Load(ctx); err != nil {
 		return fmt.Errorf("load describer: %w", err)
 	}
 
 	for _, imgPath := range images {
-		s.log(ctx, "describing image", "path", imgPath)
-
 		desc, err := s.describer.Describe(ctx, imgPath)
 		if err != nil {
 			s.log(ctx, "describe error", "path", imgPath, "error", err)
@@ -167,6 +165,7 @@ func findImages(folderPath string) ([]string, error) {
 			return nil
 		}
 
+		// TODO: validate image formats
 		ext := strings.ToLower(filepath.Ext(path))
 		switch ext {
 		case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp":

@@ -7,21 +7,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ramon-reichert/locallens/internal/description"
+	"github.com/ramon-reichert/locallens/internal/service/description"
+	"github.com/ramon-reichert/locallens/internal/service/tests/testsboot"
 )
 
 func TestDescribe(t *testing.T) {
-	imageFile := filepath.Join("testdata", "sample.jpg")
+	testsboot.Boot()
+	imageFile := filepath.Join("..", "testdata", "353kpx_63kb.jpg")
 	if _, err := os.Stat(imageFile); os.IsNotExist(err) {
-		t.Skip("testdata/sample.jpg not found")
+		t.Fatalf("%s not found", imageFile)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
 	d := description.New(description.Config{
-		Log:   log,
-		Paths: visionPaths,
+		Log:   testsboot.Log,
+		Paths: testsboot.VisionPaths,
 	})
 	defer d.Unload(ctx)
 
@@ -42,8 +44,9 @@ func TestDescribe(t *testing.T) {
 }
 
 func TestDescribe_NotLoaded(t *testing.T) {
+	testsboot.Boot()
 	d := description.New(description.Config{
-		Log: log,
+		Log: testsboot.Log,
 	})
 
 	_, err := d.Describe(context.Background(), "any.jpg")

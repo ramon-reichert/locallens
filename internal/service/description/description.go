@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/ardanlabs/kronk/sdk/kronk"
 	"github.com/ardanlabs/kronk/sdk/kronk/model"
@@ -52,8 +53,10 @@ func (d *Describer) Load(ctx context.Context) error {
 		return nil
 	}
 
+	start := time.Now()
 	d.log(ctx, "loading vision model")
 
+	// TODO: tune this settings to fit app needs
 	cfg := model.Config{
 		ModelFiles:    d.paths.ModelFiles,
 		ProjFile:      d.paths.ProjFile,
@@ -71,6 +74,7 @@ func (d *Describer) Load(ctx context.Context) error {
 
 	d.krn = krn
 	d.log(ctx, "vision model loaded",
+		"loading time", time.Since(start),
 		"context_window", krn.ModelConfig().ContextWindow,
 		"template", krn.ModelInfo().Template.FileName,
 	)
@@ -125,24 +129,25 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (string, err
 
 	prompt := "Describe this image in detail for semantic search. Focus on objects, people, actions, colors, and setting."
 
+	// TODO: tune this in accordance with the model.Config.
+	// For now the description response is being interrupted.
 	data := model.D{
 		"messages":    model.RawMediaMessage(prompt, imageData),
 		"temperature": 0.3,
 		"max_tokens":  256,
 	}
 
-	ch, err := krn.ChatStreaming(ctx, data)
+	d.log(ctx, "\ndescribing image", "path", imagePath)
+
+	start := time.Now()
+
+	resp, err := krn.Chat(ctx, data)
 	if err != nil {
-		return "", fmt.Errorf("chat streaming: %w", err)
+		return "", fmt.Errorf("chat: %w", err)
 	}
 
-	var description string
-	for resp := range ch {
-		if resp.Choice[0].FinishReason == model.FinishReasonError {
-			return "", fmt.Errorf("model error: %s", resp.Choice[0].Delta.Content)
-		}
-		description += resp.Choice[0].Delta.Content
-	}
+	description := resp.Choice[0].Message.Content
 
+	d.log(ctx, "description finished", "elapsed", time.Since(start), "description", description)
 	return description, nil
 }

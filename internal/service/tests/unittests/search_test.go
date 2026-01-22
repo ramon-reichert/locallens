@@ -3,8 +3,10 @@ package tests
 import (
 	"testing"
 
-	"github.com/ramon-reichert/locallens/internal/search"
+	"github.com/ramon-reichert/locallens/internal/service/search"
 )
+
+// TODO: Add conceptual search tests to see if its accurate.
 
 func TestFindTopK(t *testing.T) {
 	entries := []search.Entry{
