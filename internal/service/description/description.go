@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 	"github.com/ardanlabs/kronk/sdk/tools/models"
 
 	"github.com/ramon-reichert/locallens/internal/platform/logger"
+	"github.com/ramon-reichert/locallens/internal/service/image"
 )
 
 var (
@@ -56,16 +56,15 @@ func (d *Describer) Load(ctx context.Context) error {
 	start := time.Now()
 	d.log(ctx, "loading vision model")
 
-	// TODO: resize image before description, find the best tradeoff
-	// TODO: tune this settings to fit app needs
+	// TODO: tune this settings to fit app needs, maybe make it hardware dependent
 	cfg := model.Config{
 		ModelFiles:    d.paths.ModelFiles,
 		ProjFile:      d.paths.ProjFile,
-		ContextWindow: 1536,
-		NBatch:        256,
-		NUBatch:       0,
-		CacheTypeK:    model.GGMLTypeQ4_0,
-		CacheTypeV:    model.GGMLTypeQ4_0,
+		ContextWindow: 8192,
+		NBatch:        2048,
+		NUBatch:       2048,
+		CacheTypeK:    model.GGMLTypeQ8_0,
+		CacheTypeV:    model.GGMLTypeQ8_0,
 	}
 
 	krn, err := kronk.New(cfg)
@@ -119,26 +118,27 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (string, err
 		return "", ErrModelNotLoaded
 	}
 
-	imageData, err := os.ReadFile(imagePath)
+	d.log(ctx, "\nresizing image", "path", imagePath)
+
+	imageData, err := image.Resize(imagePath, image.DefaultMaxSide)
 	if err != nil {
-		return "", fmt.Errorf("read image: %w", err)
+		return "", fmt.Errorf("resize image: %w", err)
 	}
 
-	if len(imageData) == 0 {
-		return "", ErrEmptyImage
-	}
+	prompt := `Describe the image for semantic search.
+Mention visible objects, with details only if clear, attributes, actions, colors, backgroud, place and setting.
+Use short phrases or short clauses.
+Output a single comma-separated list.
+Avoid stylistic language.
+Do not output bare numbers.`
 
-	prompt := "Describe the image for semantic search. List objects, counts, attributes, actions, colors, and setting. Avoid emotions or stylistic language. Do not repeat information. Output as a single comma-separated list of phrases. No full sentences."
-
-	// TODO: tune this in accordance with the model.Config.
-	// For now the description response is being interrupted.
 	data := model.D{
 		"messages":    model.RawMediaMessage(prompt, imageData),
-		"temperature": 0.1,
-		"max_tokens":  80,
+		"temperature": 0.3,
+		"max_tokens":  256,
 	}
 
-	d.log(ctx, "\ndescribing image", "path", imagePath)
+	d.log(ctx, "describing image", "path", imagePath)
 
 	start := time.Now()
 

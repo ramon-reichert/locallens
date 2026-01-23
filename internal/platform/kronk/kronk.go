@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/ardanlabs/kronk/sdk/kronk"
-	"github.com/ardanlabs/kronk/sdk/kronk/model"
 	"github.com/ardanlabs/kronk/sdk/tools/defaults"
 	"github.com/ardanlabs/kronk/sdk/tools/libs"
 	"github.com/ardanlabs/kronk/sdk/tools/models"
@@ -15,6 +14,7 @@ import (
 	"github.com/ramon-reichert/locallens/internal/platform/logger"
 )
 
+// TODO: put this consts in packages descrition and embedding
 const (
 	VisionModelURL = "https://huggingface.co/ggml-org/Qwen2-VL-2B-Instruct-GGUF/resolve/main/Qwen2-VL-2B-Instruct-Q4_K_M.gguf"
 	VisionProjURL  = "https://huggingface.co/ggml-org/Qwen2-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen2-VL-2B-Instruct-Q8_0.gguf"
@@ -71,44 +71,4 @@ func DownloadModels(ctx context.Context, log logger.Logger) (ModelPaths, error) 
 	}
 
 	return ModelPaths{Vision: vision, Embed: embed}, nil
-}
-
-// Init initializes the Kronk runtime. Must be called once before loading models.
-func Init() error {
-	return kronk.Init()
-}
-
-// VisionConfig returns a model.Config suitable for vision inference.
-func VisionConfig(mp models.Path) model.Config {
-	return model.Config{
-		ModelFiles:    mp.ModelFiles,
-		ProjFile:      mp.ProjFile,
-		ContextWindow: 8192,
-		NBatch:        2048,
-		NUBatch:       2048,
-		CacheTypeK:    model.GGMLTypeQ8_0,
-		CacheTypeV:    model.GGMLTypeQ8_0,
-	}
-}
-
-// EmbedConfig returns a model.Config suitable for embedding inference.
-func EmbedConfig(mp models.Path) model.Config {
-	return model.Config{
-		ModelFiles:     mp.ModelFiles,
-		ContextWindow:  2048,
-		NBatch:         2048,
-		NUBatch:        512,
-		CacheTypeK:     model.GGMLTypeQ8_0,
-		CacheTypeV:     model.GGMLTypeQ8_0,
-		FlashAttention: model.FlashAttentionEnabled,
-	}
-}
-
-// LoadModel loads a model with the given configuration.
-func LoadModel(cfg model.Config) (*kronk.Kronk, error) {
-	krn, err := kronk.New(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("kronk new: %w", err)
-	}
-	return krn, nil
 }
