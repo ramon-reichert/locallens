@@ -43,20 +43,6 @@ func InstallDependencies(ctx context.Context, log logger.Logger) error {
 		return fmt.Errorf("llama.cpp libs download: %w", err)
 	}
 
-	// Don't need a template system for this app
-	// tmpl, err := templates.New()
-	// if err != nil {
-	// 	return fmt.Errorf("templates new: %w", err)
-	// }
-
-	// if err := tmpl.Download(ctx); err != nil {
-	// 	return fmt.Errorf("templates download: %w", err)
-	// }
-
-	// if err := tmpl.Catalog().Download(ctx); err != nil {
-	// 	return fmt.Errorf("catalog download: %w", err)
-	// }
-
 	return nil
 }
 

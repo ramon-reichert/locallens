@@ -56,15 +56,16 @@ func (d *Describer) Load(ctx context.Context) error {
 	start := time.Now()
 	d.log(ctx, "loading vision model")
 
+	// TODO: resize image before description, find the best tradeoff
 	// TODO: tune this settings to fit app needs
 	cfg := model.Config{
 		ModelFiles:    d.paths.ModelFiles,
 		ProjFile:      d.paths.ProjFile,
-		ContextWindow: 8192,
-		NBatch:        2048,
-		NUBatch:       2048,
-		CacheTypeK:    model.GGMLTypeQ8_0,
-		CacheTypeV:    model.GGMLTypeQ8_0,
+		ContextWindow: 1536,
+		NBatch:        256,
+		NUBatch:       0,
+		CacheTypeK:    model.GGMLTypeQ4_0,
+		CacheTypeV:    model.GGMLTypeQ4_0,
 	}
 
 	krn, err := kronk.New(cfg)
@@ -127,14 +128,14 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (string, err
 		return "", ErrEmptyImage
 	}
 
-	prompt := "Describe this image in detail for semantic search. Focus on objects, people, actions, colors, and setting."
+	prompt := "Describe the image for semantic search. List objects, counts, attributes, actions, colors, and setting. Avoid emotions or stylistic language. Do not repeat information. Output as a single comma-separated list of phrases. No full sentences."
 
 	// TODO: tune this in accordance with the model.Config.
 	// For now the description response is being interrupted.
 	data := model.D{
 		"messages":    model.RawMediaMessage(prompt, imageData),
-		"temperature": 0.3,
-		"max_tokens":  256,
+		"temperature": 0.1,
+		"max_tokens":  80,
 	}
 
 	d.log(ctx, "\ndescribing image", "path", imagePath)
