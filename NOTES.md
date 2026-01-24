@@ -43,7 +43,7 @@
 - outToks < 30 means poor descriptions. Saninty check added. Can be better tuned later.
 - Output tokens varies a lot between equal repetitions. Some outstanding descriptions (many outToks) side by side with poor ones in identical runs. Need track hardware metrics to see why is it happening;
 
-- Can we have more predictable descriptions using a system prompt?
+- Can we have more predictable descriptions using a system prompt? YES
 - Can we achieve more detailed descriptions sending separated prompts for each category(people characteristics, actions, etc)?
 
 - Some performance test outputs:
@@ -235,3 +235,54 @@ larg+tmp |  128 | complex.jpg     |        9095 |      17% |    122 |     78 |  
 larg+tmp |  512 | complex.jpg     |       29649 |      10% |    122 |     96 |  14.7 |  100%
 Grouped results saved to: performVis_grp_20260124_154902.csv
 Individual results saved to: performVis_ind_20260124_154902.csv
+
+
+
+====================================================================================================
+CONFIGS
+====================================================================================================
+Model:      Qwen2-VL-2B-Instruct-Q4_K_M.gguf
+MMProj:     mmproj-Qwen2-VL-2B-Instruct-Q4_K_M.gguf
+CacheTypeK: Q8_0
+CacheTypeV: Q8_0
+MaxSizes:   [128 64]
+
+Prompt: You extract image keywords for semantic search.
+Output format: single comma-separated list of short phrases.
+Include both general and specific terms. Don't repeat meaning.
+No articles (a, the), no filler words.
+
+Analyze this image and describe clear details into this categories:
+- people characteristics
+- actions
+- objects
+- location, environment
+- visible text
+- lighting, colors
+- backgound and atmosphere
+
+Name     | CtxWin | NBatch | NUBatch | MaxTok |  Temp
+------------------------------------------------------------
+small    |   2048 |      8 |       8 |    200 | 0.1
+large    |   8192 |   2048 |    2048 |    200 | 0.1
+
+====================================================================================================
+SUMMARY BY CONFIG + MAXSIZE
+====================================================================================================
+large    @ 64: avgTime   7214ms | avgTimeVar  14% | inTok  107 | outTok  58 | Tok/s 14.0
+large    @128: avgTime   9190ms | avgTimeVar  22% | inTok  107 | outTok  70 | Tok/s 14.8
+small    @ 64: avgTime   7217ms | avgTimeVar   5% | inTok  107 | outTok  54 | Tok/s 13.9
+small    @128: avgTime  10159ms | avgTimeVar  16% | inTok  107 | outTok  75 | Tok/s 13.7
+====================================================================================================
+
+====================================================================================================
+GROUPED RESULTS
+====================================================================================================
+Config   |  Max | Image           | AvgTime(ms) | TimeVar% |  InTok | OutTok | Tok/s |  Succ
+----------------------------------------------------------------------------------------------------
+small    |  128 | complex.jpg     |       10159 |      16% |    107 |     75 |  13.7 |  100%
+small    |   64 | complex.jpg     |        7217 |       5% |    107 |     54 |  13.9 |  100%
+large    |  128 | complex.jpg     |        9190 |      22% |    107 |     70 |  14.8 |   67%
+large    |   64 | complex.jpg     |        7214 |      14% |    107 |     58 |  14.0 |  100%
+Grouped results saved to: performVis_grp_20260124_191028.csv
+Individual results saved to: performVis_ind_20260124_191028.csv

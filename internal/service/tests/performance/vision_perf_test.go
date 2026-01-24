@@ -22,7 +22,6 @@ import (
 	kronksdk "github.com/ardanlabs/kronk/sdk/kronk"
 	"github.com/ardanlabs/kronk/sdk/kronk/model"
 
-	"github.com/ramon-reichert/locallens/internal/service/description"
 	"github.com/ramon-reichert/locallens/internal/service/image"
 	"github.com/ramon-reichert/locallens/internal/service/tests/testsboot"
 )
@@ -32,16 +31,36 @@ const (
 	minOutToks         = 30
 )
 
-var defaultMaxSizes = []int{128, 512} //256,
+var defaultMaxSizes = []int{128, 64} //256, 512
 
 var defaultConfigs = []ConfigVariant{
 	{"small", 2048, 8, 8, 200, 0.1},
-	{"small+temp", 2048, 8, 8, 200, 0.4},
 	{"large", 8192, 2048, 2048, 200, 0.1},
-	{"large+temp", 8192, 2048, 2048, 200, 0.4},
 }
 
-var prompt = description.Prompt
+var systemPrompt = `You extract image keywords for semantic search.
+Output format: single comma-separated list of short phrases.
+Include both general and specific terms. Don't repeat meaning.
+No articles (a, the), no filler words.`
+
+var userPrompts = []string{
+	`Analyze this image and describe clear details into this categories:
+- people characteristics
+- actions
+- objects
+- location, environment
+- visible text
+- lighting, colors
+- backgound and atmosphere`,
+
+	// "Describe people: characteristics, clothing, poses, expressions.",
+	// "Describe actions: what is happening, movements, interactions.",
+	// "Describe objects: items, vehicles, furniture, tools visible.",
+	// "Describe location and environment: place type, indoor/outdoor, setting.",
+	// "Describe visible text: signs, labels, writing.",
+	// "Describe lighting and colors: dominant colors, light source, time of day.",
+	// "Describe background and atmosphere: mood, weather, depth.",
+}
 
 type ConfigVariant struct {
 	Name          string
@@ -123,12 +142,14 @@ func TestVisionPerformance(t *testing.T) {
 		t.Skip("no test images found")
 	}
 
+	fullPrompt := systemPrompt + "\n\n" + strings.Join(userPrompts, "\n")
+
 	info := BenchmarkInfo{
 		ModelFile:  filepath.Base(testsboot.VisionPaths.ModelFiles[0]),
 		ProjFile:   filepath.Base(testsboot.VisionPaths.ProjFile),
 		CacheTypeK: "Q8_0",
 		CacheTypeV: "Q8_0",
-		Prompt:     prompt,
+		Prompt:     fullPrompt,
 		Configs:    defaultConfigs,
 		MaxSizes:   defaultMaxSizes,
 	}
@@ -157,7 +178,7 @@ func TestVisionPerformance(t *testing.T) {
 		for _, maxSize := range defaultMaxSizes {
 
 			for _, imgPath := range images {
-				aggResult := runWithRepetitions(ctx, krn, imgPath, prompt, cfg, maxSize, repetitions)
+				aggResult := runWithRepetitions(ctx, krn, imgPath, cfg, maxSize, repetitions)
 				results = append(results, aggResult)
 
 				fmt.Printf("     >>>> maxSize: %d === %s: avgTime %.0fms | timeVar %.0f%% | %d/%d success\n\n\n",
@@ -179,12 +200,14 @@ func TestVisionPerformance(t *testing.T) {
 	saveCSV(info, results)
 }
 
-func runWithRepetitions(ctx context.Context, krn *kronksdk.Kronk, imgPath, prompt string, cfg ConfigVariant, maxSize, reps int) AggregatedResult {
+func runWithRepetitions(ctx context.Context, krn *kronksdk.Kronk, imgPath string, cfg ConfigVariant, maxSize, reps int) AggregatedResult {
+	fullPrompt := systemPrompt + "\n\n" + strings.Join(userPrompts, "\n")
+
 	result := AggregatedResult{
 		Config:  cfg.Name,
 		MaxSize: maxSize,
 		Image:   filepath.Base(imgPath),
-		Prompt:  prompt,
+		Prompt:  fullPrompt,
 		Runs:    make([]RunResult, 0, reps),
 	}
 
@@ -217,7 +240,7 @@ func runWithRepetitions(ctx context.Context, krn *kronksdk.Kronk, imgPath, promp
 
 	// Run multiple times
 	for i := 0; i < reps; i++ {
-		run := runSingleInference(ctx, krn, imageData, prompt, cfg, i+1)
+		run := runSingleInference(ctx, krn, imageData, cfg, i+1)
 		result.Runs = append(result.Runs, run)
 	}
 
@@ -227,11 +250,23 @@ func runWithRepetitions(ctx context.Context, krn *kronksdk.Kronk, imgPath, promp
 	return result
 }
 
-func runSingleInference(ctx context.Context, krn *kronksdk.Kronk, imageData []byte, prompt string, cfg ConfigVariant, runNum int) RunResult {
+func runSingleInference(ctx context.Context, krn *kronksdk.Kronk, imageData []byte, cfg ConfigVariant, runNum int) RunResult {
 	run := RunResult{Run: runNum}
 
+	// Build multi-message structure:
+	// 1. System message (format instructions)
+	// 2. User message with image (raw media)
+	// 3. Multiple user messages (one per category)
+	messages := []model.D{
+		{"role": "system", "content": systemPrompt},
+		{"role": "user", "content": imageData},
+	}
+	for _, p := range userPrompts {
+		messages = append(messages, model.D{"role": "user", "content": p})
+	}
+
 	data := model.D{
-		"messages":    model.RawMediaMessage(prompt, imageData),
+		"messages":    messages,
 		"temperature": cfg.Temperature,
 		"max_tokens":  cfg.MaxTokens,
 	}
