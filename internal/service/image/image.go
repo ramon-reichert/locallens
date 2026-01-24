@@ -34,8 +34,8 @@ func Resize(srcPath string, maxSide int) ([]byte, error) {
 	w := bounds.Dx()
 	h := bounds.Dy()
 
-	fmt.Printf("before resize: %dx%d", w, h)
-	fmt.Println()
+	// fmt.Printf("before resize: %dx%d", w, h)
+	// fmt.Println()
 
 	// Scale down if needed
 	if w > maxSide || h > maxSide {
@@ -52,8 +52,8 @@ func Resize(srcPath string, maxSide int) ([]byte, error) {
 		return nil, fmt.Errorf("encode jpeg: %w", err)
 	}
 
-	fmt.Printf("output: %dx%d, %d bytes", w, h, len(buf.Bytes()))
-	fmt.Println()
+	// fmt.Printf("output: %dx%d, %d bytes", w, h, len(buf.Bytes()))
+	// fmt.Println()
 
 	return buf.Bytes(), nil
 }

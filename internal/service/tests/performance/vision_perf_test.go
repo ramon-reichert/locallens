@@ -1,4 +1,4 @@
-package benchmark
+package performance
 
 import (
 	"bytes"
@@ -107,7 +107,7 @@ type BenchmarkInfo struct {
 	MaxSizes   []int
 }
 
-func TestConfigBenchmark(t *testing.T) {
+func TestVisionPerformance(t *testing.T) {
 	testsboot.Boot()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
@@ -134,8 +134,9 @@ func TestConfigBenchmark(t *testing.T) {
 	var results []AggregatedResult
 
 	for _, cfg := range defaultConfigs {
-		t.Logf("\n=== Config: %s (ctx=%d, batch=%d, ubatch=%d) | %d repetitions ===",
-			cfg.Name, cfg.ContextWindow, cfg.NBatch, cfg.NUBatch, repetitions)
+		fmt.Print(strings.Repeat("=", 100))
+		fmt.Printf("\n\n    === Config: %s (ctx=%d, Nbatch=%d, NUbatch=%d, maxTok=%d, temp=%v) | %d repetitions ===\n\n",
+			cfg.Name, cfg.ContextWindow, cfg.NBatch, cfg.NUBatch, cfg.MaxTokens, cfg.Temperature, repetitions)
 
 		krn, err := kronksdk.New(model.Config{
 			ModelFiles:    testsboot.VisionPaths.ModelFiles,
@@ -147,18 +148,18 @@ func TestConfigBenchmark(t *testing.T) {
 			CacheTypeV:    model.GGMLTypeQ8_0,
 		})
 		if err != nil {
-			t.Logf("config %s failed to load: %v", cfg.Name, err)
+			fmt.Printf("config %s failed to load: %v", cfg.Name, err)
 			continue
 		}
 
 		for _, maxSize := range defaultMaxSizes {
-			t.Logf("  --- maxSize: %d ---", maxSize)
 
 			for _, imgPath := range images {
 				aggResult := runWithRepetitions(ctx, krn, imgPath, prompt, cfg, maxSize, repetitions)
 				results = append(results, aggResult)
 
-				t.Logf("    %s: mean %.0fms | CV %.0f%% | %d/%d success",
+				fmt.Printf("     >>>> maxSize: %d === %s: avgTime %.0fms | timeVar %.0f%% | %d/%d success\n\n\n",
+					maxSize,
 					filepath.Base(imgPath),
 					aggResult.Stats.MeanTime,
 					aggResult.Stats.VarianceCV*100,
@@ -170,11 +171,10 @@ func TestConfigBenchmark(t *testing.T) {
 		krn.Unload(ctx)
 	}
 
-	printConfigs(t, info)
-	printConfigSummary(t, results)
-	printGroupedResults(t, results)
-	printIndividualResults(t, results)
-	saveCSV(t, info, results)
+	printConfigs(info)
+	printConfigSummary(results)
+	printGroupedResults(results)
+	saveCSV(info, results)
 }
 
 func runWithRepetitions(ctx context.Context, krn *kronksdk.Kronk, imgPath, prompt string, cfg ConfigVariant, maxSize, reps int) AggregatedResult {
@@ -251,6 +251,12 @@ func runSingleInference(ctx context.Context, krn *kronksdk.Kronk, imageData []by
 		TotalTokens:      resp.Usage.TotalTokens,
 		TokensPerSecond:  resp.Usage.TokensPerSecond,
 	}
+
+	fmt.Printf("=> Run %d: %d ms | inTok=%d outTok=%d | Tok/s=%.1f",
+		run.Run, run.Elapsed.Milliseconds(),
+		run.Metrics.PromptTokens, run.Metrics.CompletionTokens,
+		run.Metrics.TokensPerSecond)
+	fmt.Printf("| Description: %s\n\n", run.Description)
 
 	return run
 }
@@ -362,73 +368,52 @@ func getImageInfo(path string) (imgInfo, error) {
 	return imgInfo{W: img.Width, H: img.Height}, nil
 }
 
-func printConfigs(t *testing.T, info BenchmarkInfo) {
-	t.Log("\n" + strings.Repeat("=", 100))
-	t.Log("CONFIGS")
-	t.Log(strings.Repeat("=", 100))
+func printConfigs(info BenchmarkInfo) {
+	fmt.Print("\n" + strings.Repeat("=", 100))
+	fmt.Print("CONFIGS")
+	fmt.Print(strings.Repeat("=", 100))
 
-	t.Logf("Model:      %s", info.ModelFile)
-	t.Logf("MMProj:     %s", info.ProjFile)
-	t.Logf("CacheTypeK: %s", info.CacheTypeK)
-	t.Logf("CacheTypeV: %s", info.CacheTypeV)
-	t.Logf("MaxSizes:   %v", info.MaxSizes)
-	t.Log("")
-	t.Logf("Prompt: %s", strings.ReplaceAll(info.Prompt, "\n", " "))
-	t.Log("")
+	fmt.Printf("Model:      %s", info.ModelFile)
+	fmt.Printf("MMProj:     %s", info.ProjFile)
+	fmt.Printf("CacheTypeK: %s", info.CacheTypeK)
+	fmt.Printf("CacheTypeV: %s", info.CacheTypeV)
+	fmt.Printf("MaxSizes:   %v", info.MaxSizes)
+	fmt.Print("")
+	fmt.Printf("Prompt: %s", strings.ReplaceAll(info.Prompt, "\n", " "))
+	fmt.Print("")
 
-	t.Logf("%-8s | %6s | %6s | %7s | %6s | %5s",
+	fmt.Printf("%-8s | %6s | %6s | %7s | %6s | %5s",
 		"Name", "CtxWin", "NBatch", "NUBatch", "MaxTok", "Temp")
-	t.Log(strings.Repeat("-", 60))
+	fmt.Print(strings.Repeat("-", 60))
 	for _, cfg := range info.Configs {
-		t.Logf("%-8s | %6d | %6d | %7d | %6d | %.1f",
+		fmt.Printf("%-8s | %6d | %6d | %7d | %6d | %.1f",
 			cfg.Name, cfg.ContextWindow, cfg.NBatch, cfg.NUBatch, cfg.MaxTokens, cfg.Temperature)
 	}
 }
 
-func printGroupedResults(t *testing.T, results []AggregatedResult) {
-	t.Log("\n" + strings.Repeat("=", 100))
-	t.Log("GROUPED RESULTS")
-	t.Log(strings.Repeat("=", 100))
-	t.Logf("%-8s | %4s | %-15s | %10s | %5s | %6s | %6s | %5s | %5s",
-		"Config", "Max", "Image", "AvgTime(ms)", "CV%", "InTok", "OutTok", "TPS", "Succ")
-	t.Log(strings.Repeat("-", 100))
+func printGroupedResults(results []AggregatedResult) {
+	fmt.Print("\n" + strings.Repeat("=", 100))
+	fmt.Print("GROUPED RESULTS")
+	fmt.Print(strings.Repeat("=", 100))
+	fmt.Printf("%-8s | %4s | %-15s | %10s | %5s | %6s | %6s | %5s | %5s",
+		"Config", "Max", "Image", "AvgTime(ms)", "TimeVar%", "InTok", "OutTok", "Tok/s", "Succ")
+	fmt.Print(strings.Repeat("-", 100))
 
 	for _, r := range results {
 		successPct := fmt.Sprintf("%.0f%%", r.Stats.SuccessRate*100)
 		cvPct := fmt.Sprintf("%.0f%%", r.Stats.VarianceCV*100)
 
-		t.Logf("%-8s | %4d | %-15s | %10.0f | %5s | %6.0f | %6.0f | %5.1f | %5s",
+		fmt.Printf("%-8s | %4d | %-15s | %10.0f | %5s | %6.0f | %6.0f | %5.1f | %5s",
 			r.Config, r.MaxSize, r.Image,
 			r.Stats.MeanTime, cvPct, r.Stats.MeanInTok, r.Stats.MeanOutTok,
 			r.Stats.MeanTPS, successPct)
 	}
 }
 
-func printIndividualResults(t *testing.T, results []AggregatedResult) {
-	t.Log("\n" + strings.Repeat("=", 120))
-	t.Log("INDIVIDUAL RESULTS")
-	t.Log(strings.Repeat("=", 120))
-
-	for _, r := range results {
-		t.Logf("\n--- %s | maxSize=%d | %s ---", r.Config, r.MaxSize, r.Image)
-		for _, run := range r.Runs {
-			if run.Error != "" {
-				t.Logf("  Run %d: ERROR - %s", run.Run, run.Error)
-				continue
-			}
-			t.Logf("  Run %d: %dms | inTok=%d outTok=%d | TPS=%.1f",
-				run.Run, run.Elapsed.Milliseconds(),
-				run.Metrics.PromptTokens, run.Metrics.CompletionTokens,
-				run.Metrics.TokensPerSecond)
-			t.Logf("    Description: %s", run.Description)
-		}
-	}
-}
-
-func printConfigSummary(t *testing.T, results []AggregatedResult) {
-	t.Log("\n" + strings.Repeat("=", 100))
-	t.Log("SUMMARY BY CONFIG + MAXSIZE")
-	t.Log(strings.Repeat("=", 100))
+func printConfigSummary(results []AggregatedResult) {
+	fmt.Print("\n" + strings.Repeat("=", 100))
+	fmt.Print("SUMMARY BY CONFIG + MAXSIZE")
+	fmt.Print(strings.Repeat("=", 100))
 
 	type key struct {
 		config  string
@@ -475,7 +460,7 @@ func printConfigSummary(t *testing.T, results []AggregatedResult) {
 		if stats.count > 0 {
 			avgCV = stats.cvSum / float64(stats.count) * 100
 		}
-		t.Logf("%-8s @%3d: avgTime %.0fms | avgCV %.0f%% | inTok %.0f | outTok %.0f | TPS %.1f",
+		fmt.Printf("%-8s @%3d: avgTime %.0fms | avgTimeVar %.0f%% | inTok %.0f | outTok %.0f | Tok/s %.1f",
 			k.config, k.maxSize,
 			mean(stats.times),
 			avgCV,
@@ -484,10 +469,10 @@ func printConfigSummary(t *testing.T, results []AggregatedResult) {
 			mean(stats.tps))
 	}
 
-	t.Log(strings.Repeat("=", 100))
+	fmt.Print(strings.Repeat("=", 100))
 }
 
-func saveCSV(t *testing.T, info BenchmarkInfo, results []AggregatedResult) {
+func saveCSV(info BenchmarkInfo, results []AggregatedResult) {
 	timestamp := time.Now().Format("20060102_150405")
 
 	prompt := strings.ReplaceAll(info.Prompt, "\"", "'")
@@ -524,9 +509,9 @@ func saveCSV(t *testing.T, info BenchmarkInfo, results []AggregatedResult) {
 	}
 
 	if err := os.WriteFile(groupedFile, []byte(sb.String()), 0644); err != nil {
-		t.Logf("failed to save grouped CSV: %v", err)
+		fmt.Printf("failed to save grouped CSV: %v", err)
 	} else {
-		t.Logf("\nGrouped results saved to: %s", groupedFile)
+		fmt.Printf("\nGrouped results saved to: %s", groupedFile)
 	}
 
 	// Save individual results
@@ -550,8 +535,8 @@ func saveCSV(t *testing.T, info BenchmarkInfo, results []AggregatedResult) {
 	}
 
 	if err := os.WriteFile(individualFile, []byte(sb.String()), 0644); err != nil {
-		t.Logf("failed to save individual CSV: %v", err)
+		fmt.Printf("failed to save individual CSV: %v", err)
 	} else {
-		t.Logf("Individual results saved to: %s", individualFile)
+		fmt.Printf("Individual results saved to: %s", individualFile)
 	}
 }

@@ -13,7 +13,7 @@ import (
 const testdataDir = "../testdata"
 
 func TestResize_JPEG(t *testing.T) {
-	imgPath := filepath.Join(testdataDir, "353kpx_63kb.jpg")
+	imgPath := filepath.Join(testdataDir, "simple.jpg")
 	if _, err := os.Stat(imgPath); os.IsNotExist(err) {
 		t.Skip("test image not found")
 	}

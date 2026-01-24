@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	"time"
 
 	kronksdk "github.com/ardanlabs/kronk/sdk/kronk"
 	"github.com/ardanlabs/kronk/sdk/tools/models"
@@ -24,9 +23,7 @@ var (
 // Boot initialize dependencies for tests once
 func Boot() {
 	once.Do(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-		defer cancel()
-
+		ctx := context.Background()
 		Log = logger.New()
 
 		fmt.Println("installing dependencies for tests")
