@@ -148,7 +148,7 @@ func TestVisionPerformance(t *testing.T) {
 			CacheTypeV:    model.GGMLTypeQ8_0,
 		})
 		if err != nil {
-			fmt.Printf("config %s failed to load: %v", cfg.Name, err)
+			fmt.Printf("config %s failed to load: %v\n", cfg.Name, err)
 			continue
 		}
 
@@ -369,41 +369,41 @@ func getImageInfo(path string) (imgInfo, error) {
 }
 
 func printConfigs(info BenchmarkInfo) {
-	fmt.Print("\n" + strings.Repeat("=", 100))
-	fmt.Print("CONFIGS")
-	fmt.Print(strings.Repeat("=", 100))
+	fmt.Println("\n" + strings.Repeat("=", 100))
+	fmt.Println("CONFIGS")
+	fmt.Println(strings.Repeat("=", 100))
 
-	fmt.Printf("Model:      %s", info.ModelFile)
-	fmt.Printf("MMProj:     %s", info.ProjFile)
-	fmt.Printf("CacheTypeK: %s", info.CacheTypeK)
-	fmt.Printf("CacheTypeV: %s", info.CacheTypeV)
-	fmt.Printf("MaxSizes:   %v", info.MaxSizes)
-	fmt.Print("")
-	fmt.Printf("Prompt: %s", strings.ReplaceAll(info.Prompt, "\n", " "))
-	fmt.Print("")
+	fmt.Printf("Model:      %s\n", info.ModelFile)
+	fmt.Printf("MMProj:     %s\n", info.ProjFile)
+	fmt.Printf("CacheTypeK: %s\n", info.CacheTypeK)
+	fmt.Printf("CacheTypeV: %s\n", info.CacheTypeV)
+	fmt.Printf("MaxSizes:   %v\n", info.MaxSizes)
+	fmt.Println()
+	fmt.Printf("Prompt: %s\n", info.Prompt)
+	fmt.Println()
 
-	fmt.Printf("%-8s | %6s | %6s | %7s | %6s | %5s",
+	fmt.Printf("%-8s | %6s | %6s | %7s | %6s | %5s\n",
 		"Name", "CtxWin", "NBatch", "NUBatch", "MaxTok", "Temp")
-	fmt.Print(strings.Repeat("-", 60))
+	fmt.Println(strings.Repeat("-", 60))
 	for _, cfg := range info.Configs {
-		fmt.Printf("%-8s | %6d | %6d | %7d | %6d | %.1f",
+		fmt.Printf("%-8s | %6d | %6d | %7d | %6d | %.1f\n",
 			cfg.Name, cfg.ContextWindow, cfg.NBatch, cfg.NUBatch, cfg.MaxTokens, cfg.Temperature)
 	}
 }
 
 func printGroupedResults(results []AggregatedResult) {
-	fmt.Print("\n" + strings.Repeat("=", 100))
-	fmt.Print("GROUPED RESULTS")
-	fmt.Print(strings.Repeat("=", 100))
-	fmt.Printf("%-8s | %4s | %-15s | %10s | %5s | %6s | %6s | %5s | %5s",
+	fmt.Println("\n" + strings.Repeat("=", 100))
+	fmt.Println("GROUPED RESULTS")
+	fmt.Println(strings.Repeat("=", 100))
+	fmt.Printf("%-8s | %4s | %-15s | %11s | %8s | %6s | %6s | %5s | %5s\n",
 		"Config", "Max", "Image", "AvgTime(ms)", "TimeVar%", "InTok", "OutTok", "Tok/s", "Succ")
-	fmt.Print(strings.Repeat("-", 100))
+	fmt.Println(strings.Repeat("-", 100))
 
 	for _, r := range results {
 		successPct := fmt.Sprintf("%.0f%%", r.Stats.SuccessRate*100)
 		cvPct := fmt.Sprintf("%.0f%%", r.Stats.VarianceCV*100)
 
-		fmt.Printf("%-8s | %4d | %-15s | %10.0f | %5s | %6.0f | %6.0f | %5.1f | %5s",
+		fmt.Printf("%-8s | %4d | %-15s | %11.0f | %8s | %6.0f | %6.0f | %5.1f | %5s\n",
 			r.Config, r.MaxSize, r.Image,
 			r.Stats.MeanTime, cvPct, r.Stats.MeanInTok, r.Stats.MeanOutTok,
 			r.Stats.MeanTPS, successPct)
@@ -411,9 +411,9 @@ func printGroupedResults(results []AggregatedResult) {
 }
 
 func printConfigSummary(results []AggregatedResult) {
-	fmt.Print("\n" + strings.Repeat("=", 100))
-	fmt.Print("SUMMARY BY CONFIG + MAXSIZE")
-	fmt.Print(strings.Repeat("=", 100))
+	fmt.Println("\n" + strings.Repeat("=", 100))
+	fmt.Println("SUMMARY BY CONFIG + MAXSIZE")
+	fmt.Println(strings.Repeat("=", 100))
 
 	type key struct {
 		config  string
@@ -460,7 +460,7 @@ func printConfigSummary(results []AggregatedResult) {
 		if stats.count > 0 {
 			avgCV = stats.cvSum / float64(stats.count) * 100
 		}
-		fmt.Printf("%-8s @%3d: avgTime %.0fms | avgTimeVar %.0f%% | inTok %.0f | outTok %.0f | Tok/s %.1f",
+		fmt.Printf("%-8s @%3d: avgTime %6.0fms | avgTimeVar %3.0f%% | inTok %4.0f | outTok %3.0f | Tok/s %4.1f\n",
 			k.config, k.maxSize,
 			mean(stats.times),
 			avgCV,
@@ -469,7 +469,7 @@ func printConfigSummary(results []AggregatedResult) {
 			mean(stats.tps))
 	}
 
-	fmt.Print(strings.Repeat("=", 100))
+	fmt.Println(strings.Repeat("=", 100))
 }
 
 func saveCSV(info BenchmarkInfo, results []AggregatedResult) {
@@ -509,9 +509,9 @@ func saveCSV(info BenchmarkInfo, results []AggregatedResult) {
 	}
 
 	if err := os.WriteFile(groupedFile, []byte(sb.String()), 0644); err != nil {
-		fmt.Printf("failed to save grouped CSV: %v", err)
+		fmt.Printf("failed to save grouped CSV: %v\n", err)
 	} else {
-		fmt.Printf("\nGrouped results saved to: %s", groupedFile)
+		fmt.Printf("\nGrouped results saved to: %s\n", groupedFile)
 	}
 
 	// Save individual results
@@ -535,8 +535,8 @@ func saveCSV(info BenchmarkInfo, results []AggregatedResult) {
 	}
 
 	if err := os.WriteFile(individualFile, []byte(sb.String()), 0644); err != nil {
-		fmt.Printf("failed to save individual CSV: %v", err)
+		fmt.Printf("failed to save individual CSV: %v\n", err)
 	} else {
-		fmt.Printf("Individual results saved to: %s", individualFile)
+		fmt.Printf("Individual results saved to: %s\n", individualFile)
 	}
 }
