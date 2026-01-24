@@ -19,6 +19,13 @@ import (
 var (
 	ErrModelNotLoaded = errors.New("vision model not loaded")
 	ErrEmptyImage     = errors.New("empty image data")
+
+	Prompt = `Describe the image for semantic search.
+Mention visible objects, with details only if clear, attributes, actions, colors, backgroud, place and setting.
+Use short phrases or short clauses.
+Output a single comma-separated list.
+Avoid stylistic language.
+Do not output bare numbers.`
 )
 
 // Describer manages the vision model for image description.
@@ -125,12 +132,7 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (string, err
 		return "", fmt.Errorf("resize image: %w", err)
 	}
 
-	prompt := `Describe the image for semantic search.
-Mention visible objects, with details only if clear, attributes, actions, colors, backgroud, place and setting.
-Use short phrases or short clauses.
-Output a single comma-separated list.
-Avoid stylistic language.
-Do not output bare numbers.`
+	prompt := Prompt
 
 	data := model.D{
 		"messages":    model.RawMediaMessage(prompt, imageData),

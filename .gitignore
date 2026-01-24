@@ -25,3 +25,6 @@ Thumbs.db
 # Local config (if any)
 .env
 .env.local
+
+# Local planning
+ROADMAP.md

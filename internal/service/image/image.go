@@ -41,6 +41,8 @@ func Resize(srcPath string, maxSide int) ([]byte, error) {
 	if w > maxSide || h > maxSide {
 		w, h = scaleDimensions(w, h, maxSide)
 		dst := image.NewRGBA(image.Rect(0, 0, w, h))
+		// TODO: handle the alpha channel of images for non jpeg
+		//	draw.Draw(dst, dst.Bounds(), image.White, image.Point{}, draw.Src)  // fill white first
 		draw.CatmullRom.Scale(dst, dst.Bounds(), img, bounds, draw.Over, nil)
 		img = dst
 	}
