@@ -6,8 +6,10 @@
 *.dylib
 
 
-# Test binary
+# Test binary and output
 *.test
+*.csv
+*.csv#
 
 # Output of go coverage
 *.out
@@ -25,6 +27,3 @@ Thumbs.db
 # Local config (if any)
 .env
 .env.local
-
-# Local planning
-ROADMAP.md

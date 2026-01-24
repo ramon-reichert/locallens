@@ -29,14 +29,16 @@ import (
 
 const (
 	DefaultRepetitions = 3
+	minOutToks         = 30
 )
 
-var defaultMaxSizes = []int{256, 384, 512}
+var defaultMaxSizes = []int{128, 512} //256,
 
 var defaultConfigs = []ConfigVariant{
-	{"small", 1536, 256, 0, 80, 0.2},
-	{"medium", 4096, 1024, 1024, 120, 0.2},
-	{"large", 8192, 2048, 2048, 120, 0.2},
+	{"small", 2048, 8, 8, 200, 0.1},
+	{"small+temp", 2048, 8, 8, 200, 0.4},
+	{"large", 8192, 2048, 2048, 200, 0.1},
+	{"large+temp", 8192, 2048, 2048, 200, 0.4},
 }
 
 var prompt = description.Prompt
@@ -250,6 +252,16 @@ func runSingleInference(ctx context.Context, krn *kronksdk.Kronk, imageData []by
 		CompletionTokens: resp.Usage.CompletionTokens,
 		TotalTokens:      resp.Usage.TotalTokens,
 		TokensPerSecond:  resp.Usage.TokensPerSecond,
+	}
+
+	// TODO: add this sanity check to real service
+	if resp.Usage.CompletionTokens > cfg.MaxTokens {
+		run.Error = "model hallucinated"
+	}
+
+	// TODO: add this sanity check to real service
+	if resp.Usage.CompletionTokens < minOutToks {
+		run.Error = "poor description"
 	}
 
 	fmt.Printf("=> Run %d: %d ms | inTok=%d outTok=%d | Tok/s=%.1f",
@@ -479,7 +491,7 @@ func saveCSV(info BenchmarkInfo, results []AggregatedResult) {
 	prompt = strings.ReplaceAll(prompt, "\n", " ")
 
 	// Save grouped results
-	groupedFile := fmt.Sprintf("benchmark_grouped_%s.csv", timestamp)
+	groupedFile := fmt.Sprintf("performVis_grp_%s.csv", timestamp)
 	var sb strings.Builder
 	sb.WriteString("model,mmproj,cache_k,cache_v,prompt,")
 	sb.WriteString("config,ctx_win,nbatch,nubatch,max_tok,temp,")
@@ -515,9 +527,9 @@ func saveCSV(info BenchmarkInfo, results []AggregatedResult) {
 	}
 
 	// Save individual results
-	individualFile := fmt.Sprintf("benchmark_individual_%s.csv", timestamp)
+	individualFile := fmt.Sprintf("performVis_ind_%s.csv", timestamp)
 	sb.Reset()
-	sb.WriteString("config,max_size,image,run,elapsed_ms,in_tok,out_tok,tps,error,description\n")
+	sb.WriteString("config,max_size,image,run,elapsed_ms,in_tok,out_tok,tps,description,error\n")
 
 	for _, r := range results {
 		for _, run := range r.Runs {
@@ -529,8 +541,8 @@ func saveCSV(info BenchmarkInfo, results []AggregatedResult) {
 				r.Config, r.MaxSize, r.Image, run.Run,
 				run.Elapsed.Milliseconds(),
 				run.Metrics.PromptTokens, run.Metrics.CompletionTokens,
-				run.Metrics.TokensPerSecond,
-				errStr, desc))
+				run.Metrics.TokensPerSecond, desc,
+				errStr))
 		}
 	}
 

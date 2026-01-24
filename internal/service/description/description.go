@@ -20,12 +20,44 @@ var (
 	ErrModelNotLoaded = errors.New("vision model not loaded")
 	ErrEmptyImage     = errors.New("empty image data")
 
-	Prompt = `Describe the image for semantic search.
+	Prompt = `Analyze this image and provide a dense list of keywords and short phrases 
+optimized for semantic search embedding.
+Describe clear details into this categories:
+- people characteristics;
+- actions;
+- objects;
+- location, environment;
+- visible text;
+- lighting, colors;
+- backgound and atmosphere.
+Include both general and specific terms. Don't repeat meaning.
+Output format: single comma-separated list of short phrases.
+No articles (a, the), no filler words.`
+
+/*
+	Past prompts:
+
+`Analyze this image and provide a dense list of keywords and short phrases
+optimized for semantic search embedding.
+Describe people characteristics, actions, objects, location, visible text, lighting, colors and atmosphere.
+Include both general and specific terms.
+Output format: single comma-separated list of short phrases.
+No articles (a, the), no filler words.`
+
+`Analyze this image and provide a dense list of comma-separated keywords and short phrases
+optimized for semantic search embedding. Focus on objects, location, visible text, actions,
+lighting, and atmosphere.
+Include both general and specific terms (e.g., "red Honda scooter" not just "vehicle").
+Output format: single comma-separated list of short phrases.
+No articles (a, the), no filler words.`
+
+`Describe the image for semantic search.
 Mention visible objects, with details only if clear, attributes, actions, colors, backgroud, place and setting.
 Use short phrases or short clauses.
 Output a single comma-separated list.
 Avoid stylistic language.
 Do not output bare numbers.`
+*/
 )
 
 // Describer manages the vision model for image description.
