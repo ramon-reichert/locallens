@@ -20,45 +20,22 @@ var (
 	ErrModelNotLoaded = errors.New("vision model not loaded")
 	ErrEmptyImage     = errors.New("empty image data")
 
-	Prompt = `Analyze this image and provide a dense list of keywords and short phrases 
-optimized for semantic search embedding.
-Describe clear details into this categories:
-- people characteristics;
-- actions;
-- objects;
-- location, environment;
-- visible text;
-- lighting, colors;
-- backgound and atmosphere.
-Include both general and specific terms. Don't repeat meaning.
-Output format: single comma-separated list of short phrases.
-No articles (a, the), no filler words.`
-
-/*
-	Past prompts:
-
-`Analyze this image and provide a dense list of keywords and short phrases
-optimized for semantic search embedding.
-Describe people characteristics, actions, objects, location, visible text, lighting, colors and atmosphere.
-Include both general and specific terms.
-Output format: single comma-separated list of short phrases.
-No articles (a, the), no filler words.`
-
-`Analyze this image and provide a dense list of comma-separated keywords and short phrases
-optimized for semantic search embedding. Focus on objects, location, visible text, actions,
-lighting, and atmosphere.
-Include both general and specific terms (e.g., "red Honda scooter" not just "vehicle").
-Output format: single comma-separated list of short phrases.
-No articles (a, the), no filler words.`
-
-`Describe the image for semantic search.
-Mention visible objects, with details only if clear, attributes, actions, colors, backgroud, place and setting.
-Use short phrases or short clauses.
-Output a single comma-separated list.
-Avoid stylistic language.
-Do not output bare numbers.`
-*/
+	P = Prompt{
+		SystemPrompt: "You extract image keywords for semantic search.",
+		UserPrompt: `Describe this image in detail. Include: 
+objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.`,
+		MaxTokens:   300,
+		Temperature: 0.1,
+	}
 )
+
+// Prompt holds prompt values to be sent to the model inference.
+type Prompt struct {
+	SystemPrompt string
+	UserPrompt   string
+	MaxTokens    int
+	Temperature  float64
+}
 
 // Describer manages the vision model for image description.
 type Describer struct {
@@ -99,9 +76,9 @@ func (d *Describer) Load(ctx context.Context) error {
 	cfg := model.Config{
 		ModelFiles:    d.paths.ModelFiles,
 		ProjFile:      d.paths.ProjFile,
-		ContextWindow: 8192,
-		NBatch:        2048,
-		NUBatch:       2048,
+		ContextWindow: 1024,
+		NBatch:        8,
+		NUBatch:       8,
 		CacheTypeK:    model.GGMLTypeQ8_0,
 		CacheTypeV:    model.GGMLTypeQ8_0,
 	}
@@ -164,12 +141,16 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (string, err
 		return "", fmt.Errorf("resize image: %w", err)
 	}
 
-	prompt := Prompt
+	messages := []model.D{
+		{"role": "system", "content": P.SystemPrompt},
+		{"role": "user", "content": imageData},
+		{"role": "user", "content": P.UserPrompt},
+	}
 
 	data := model.D{
-		"messages":    model.RawMediaMessage(prompt, imageData),
-		"temperature": 0.3,
-		"max_tokens":  256,
+		"messages":    messages,
+		"temperature": P.Temperature,
+		"max_tokens":  P.MaxTokens,
 	}
 
 	d.log(ctx, "describing image", "path", imagePath)

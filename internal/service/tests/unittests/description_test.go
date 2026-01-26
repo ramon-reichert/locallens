@@ -13,7 +13,7 @@ import (
 
 func TestDescribe(t *testing.T) {
 	testsboot.Boot()
-	imageFile := filepath.Join("..", "testdata", "353kpx_63kb.jpg")
+	imageFile := filepath.Join("..", "testdata", "simple.jpg")
 	if _, err := os.Stat(imageFile); os.IsNotExist(err) {
 		t.Fatalf("%s not found", imageFile)
 	}

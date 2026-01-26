@@ -23,6 +23,7 @@ import (
 	kronksdk "github.com/ardanlabs/kronk/sdk/kronk"
 	"github.com/ardanlabs/kronk/sdk/kronk/model"
 
+	"github.com/ramon-reichert/locallens/internal/service/description"
 	"github.com/ramon-reichert/locallens/internal/service/image"
 	"github.com/ramon-reichert/locallens/internal/service/tests/testsboot"
 )
@@ -34,21 +35,18 @@ const (
 var defaultMaxSizes = []int{384} //64, 128, 256, 384, 512
 
 var defaultConfigs = []ConfigVariant{
-	{"small", 1024, 8, 8, 300, 0.1},
+	{"small", 1024, 8, 8, model.GGMLTypeQ8_0, model.GGMLTypeQ8_0},
 }
 
-var systemPrompt = "You extract image keywords for semantic search."
-
-var userPrompt = `Describe this image in detail. Include: 
-objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.`
+var P = description.P
 
 type ConfigVariant struct {
 	Name          string
 	ContextWindow int
 	NBatch        int
 	NUBatch       int
-	MaxTokens     int
-	Temperature   float64
+	CacheTypeK    model.GGMLType
+	CacheTypeV    model.GGMLType
 }
 
 type ImageInfo struct {
@@ -99,13 +97,11 @@ type Stats struct {
 }
 
 type BenchmarkInfo struct {
-	ModelFile  string
-	ProjFile   string
-	CacheTypeK string
-	CacheTypeV string
-	Prompt     string
-	Configs    []ConfigVariant
-	MaxSizes   []int
+	ModelFile string
+	ProjFile  string
+	Prompt    string
+	Configs   []ConfigVariant
+	MaxSizes  []int
 }
 
 func TestVisionPerformance(t *testing.T) {
@@ -126,24 +122,22 @@ func TestVisionPerformance(t *testing.T) {
 		t.Skip("no test images found")
 	}
 
-	fullPrompt := systemPrompt + "\n\n" + userPrompt + "\n"
+	fullPrompt := P.SystemPrompt + "\n\n" + P.UserPrompt + "\n"
 
 	info := BenchmarkInfo{
-		ModelFile:  filepath.Base(testsboot.VisionPaths.ModelFiles[0]),
-		ProjFile:   filepath.Base(testsboot.VisionPaths.ProjFile),
-		CacheTypeK: "Q8_0",
-		CacheTypeV: "Q8_0",
-		Prompt:     fullPrompt,
-		Configs:    defaultConfigs,
-		MaxSizes:   defaultMaxSizes,
+		ModelFile: filepath.Base(testsboot.VisionPaths.ModelFiles[0]),
+		ProjFile:  filepath.Base(testsboot.VisionPaths.ProjFile),
+		Prompt:    fullPrompt,
+		Configs:   defaultConfigs,
+		MaxSizes:  defaultMaxSizes,
 	}
 
 	var results []AggregatedResult
 
 	for _, cfg := range defaultConfigs {
 		fmt.Print(strings.Repeat("=", 100))
-		fmt.Printf("\n\n    === Config: %s (ctx=%d, Nbatch=%d, NUbatch=%d, maxTok=%d, temp=%v) | %d repetitions ===\n\n",
-			cfg.Name, cfg.ContextWindow, cfg.NBatch, cfg.NUBatch, cfg.MaxTokens, cfg.Temperature, repetitions)
+		fmt.Printf("\n\n    === Config: %s (ctx=%d, Nbatch=%d, NUbatch=%d) | maxTok=%d, temp=%.1f | %d reps ===\n\n",
+			cfg.Name, cfg.ContextWindow, cfg.NBatch, cfg.NUBatch, P.MaxTokens, P.Temperature, repetitions)
 
 		krn, err := kronksdk.New(model.Config{
 			ModelFiles:    testsboot.VisionPaths.ModelFiles,
@@ -151,8 +145,8 @@ func TestVisionPerformance(t *testing.T) {
 			ContextWindow: cfg.ContextWindow,
 			NBatch:        cfg.NBatch,
 			NUBatch:       cfg.NUBatch,
-			CacheTypeK:    model.GGMLTypeQ8_0,
-			CacheTypeV:    model.GGMLTypeQ8_0,
+			CacheTypeK:    cfg.CacheTypeK,
+			CacheTypeV:    cfg.CacheTypeV,
 		})
 		if err != nil {
 			fmt.Printf("config %s failed to load: %v\n", cfg.Name, err)
@@ -187,7 +181,7 @@ func TestVisionPerformance(t *testing.T) {
 }
 
 func runWithRepetitions(ctx context.Context, krn *kronksdk.Kronk, imgPath string, cfg ConfigVariant, maxSize, reps int) AggregatedResult {
-	fullPrompt := systemPrompt + "\n\n" + userPrompt + "\n"
+	fullPrompt := P.SystemPrompt + "\n\n" + P.UserPrompt + "\n"
 
 	result := AggregatedResult{
 		Config:  cfg.Name,
@@ -226,13 +220,13 @@ func runWithRepetitions(ctx context.Context, krn *kronksdk.Kronk, imgPath string
 
 	// Run multiple times
 	for i := 0; i < reps; i++ {
-		run := runSingleInference(ctx, krn, imageData, cfg, i+1)
+		run := runSingleInference(ctx, krn, imageData, i+1)
 
-		fmt.Printf("=> Run %d: %s | maxSize=%d | Config: %s (ctx=%d, Nbatch=%d, NUbatch=%d, maxTok=%d, temp=%v)\n",
+		fmt.Printf("=> Run %d: %s | maxSize=%d | Config: %s (ctx=%d, Nbatch=%d, NUbatch=%d) | maxTok=%d, temp=%.1f\n",
 			run.Run,
 			filepath.Base(imgPath),
 			maxSize,
-			cfg.Name, cfg.ContextWindow, cfg.NBatch, cfg.NUBatch, cfg.MaxTokens, cfg.Temperature)
+			cfg.Name, cfg.ContextWindow, cfg.NBatch, cfg.NUBatch, P.MaxTokens, P.Temperature)
 
 		fmt.Printf("   Results: time=%d ms | inTok=%d outTok=%d | Tok/s=%.1f ",
 			run.Elapsed.Milliseconds(),
@@ -256,19 +250,19 @@ func runWithRepetitions(ctx context.Context, krn *kronksdk.Kronk, imgPath string
 	return result
 }
 
-func runSingleInference(ctx context.Context, krn *kronksdk.Kronk, imageData []byte, cfg ConfigVariant, runNum int) RunResult {
+func runSingleInference(ctx context.Context, krn *kronksdk.Kronk, imageData []byte, runNum int) RunResult {
 	run := RunResult{Run: runNum}
 
 	messages := []model.D{
-		{"role": "system", "content": systemPrompt},
+		{"role": "system", "content": P.SystemPrompt},
 		{"role": "user", "content": imageData},
-		{"role": "user", "content": userPrompt},
+		{"role": "user", "content": P.UserPrompt},
 	}
 
 	data := model.D{
 		"messages":    messages,
-		"temperature": cfg.Temperature,
-		"max_tokens":  cfg.MaxTokens,
+		"temperature": P.Temperature,
+		"max_tokens":  P.MaxTokens,
 	}
 
 	start := time.Now()
@@ -404,21 +398,39 @@ func printConfigs(info BenchmarkInfo) {
 	fmt.Println("CONFIGS")
 	fmt.Println(strings.Repeat("=", 100))
 
-	fmt.Printf("Model:      %s\n", info.ModelFile)
-	fmt.Printf("MMProj:     %s\n", info.ProjFile)
-	fmt.Printf("CacheTypeK: %s\n", info.CacheTypeK)
-	fmt.Printf("CacheTypeV: %s\n", info.CacheTypeV)
-	fmt.Printf("MaxSizes:   %v\n", info.MaxSizes)
+	fmt.Printf("Model:       %s\n", info.ModelFile)
+	fmt.Printf("MMProj:      %s\n", info.ProjFile)
+	fmt.Printf("MaxSizes:    %v\n", info.MaxSizes)
+	fmt.Printf("MaxTokens:   %d\n", P.MaxTokens)
+	fmt.Printf("Temperature: %.1f\n", P.Temperature)
 	fmt.Println()
 	fmt.Printf("Prompt: %s\n", info.Prompt)
 	fmt.Println()
 
-	fmt.Printf("%-8s | %6s | %6s | %7s | %6s | %5s\n",
-		"Name", "CtxWin", "NBatch", "NUBatch", "MaxTok", "Temp")
-	fmt.Println(strings.Repeat("-", 60))
+	fmt.Printf("%-10s | %6s | %6s | %7s | %8s | %8s\n",
+		"Name", "CtxWin", "NBatch", "NUBatch", "CacheK", "CacheV")
+	fmt.Println(strings.Repeat("-", 70))
 	for _, cfg := range info.Configs {
-		fmt.Printf("%-8s | %6d | %6d | %7d | %6d | %.1f\n",
-			cfg.Name, cfg.ContextWindow, cfg.NBatch, cfg.NUBatch, cfg.MaxTokens, cfg.Temperature)
+		fmt.Printf("%-10s | %6d | %6d | %7d | %8s | %8s\n",
+			cfg.Name, cfg.ContextWindow, cfg.NBatch, cfg.NUBatch,
+			cacheTypeName(cfg.CacheTypeK), cacheTypeName(cfg.CacheTypeV))
+	}
+}
+
+func cacheTypeName(t model.GGMLType) string {
+	switch t {
+	case model.GGMLTypeF16:
+		return "F16"
+	case model.GGMLTypeQ8_0:
+		return "Q8_0"
+	case model.GGMLTypeQ4_0:
+		return "Q4_0"
+	case model.GGMLTypeQ4_1:
+		return "Q4_1"
+	case model.GGMLTypeBF16:
+		return "BF16"
+	default:
+		return fmt.Sprintf("%d", t)
 	}
 }
 
@@ -510,10 +522,10 @@ func saveCSV(info BenchmarkInfo, results []AggregatedResult) {
 	prompt = strings.ReplaceAll(prompt, "\n", " ")
 
 	// Save grouped results
-	groupedFile := fmt.Sprintf("performVis_grp_%s.csv", timestamp)
+	groupedFile := fmt.Sprintf("results/performVis_grp_%s.csv", timestamp)
 	var sb strings.Builder
-	sb.WriteString("model,mmproj,cache_k,cache_v,prompt,")
-	sb.WriteString("config,ctx_win,nbatch,nubatch,max_tok,temp,")
+	sb.WriteString("model,mmproj,cache_k,cache_v,max_tok,temp,prompt,")
+	sb.WriteString("config,ctx_win,nbatch,nubatch,")
 	sb.WriteString("max_size,image,orig_w,orig_h,resized_w,resized_h,bytes,")
 	sb.WriteString("mean_ms,cv_pct,in_tok,out_tok,tps,success_rate\n")
 
@@ -526,10 +538,12 @@ func saveCSV(info BenchmarkInfo, results []AggregatedResult) {
 			}
 		}
 
-		sb.WriteString(fmt.Sprintf("\"%s\",\"%s\",%s,%s,\"%s\",",
-			info.ModelFile, info.ProjFile, info.CacheTypeK, info.CacheTypeV, prompt))
-		sb.WriteString(fmt.Sprintf("%s,%d,%d,%d,%d,%.1f,",
-			cfg.Name, cfg.ContextWindow, cfg.NBatch, cfg.NUBatch, cfg.MaxTokens, cfg.Temperature))
+		sb.WriteString(fmt.Sprintf("\"%s\",\"%s\",%s,%s,%d,%.1f,\"%s\",",
+			info.ModelFile, info.ProjFile,
+			cacheTypeName(cfg.CacheTypeK), cacheTypeName(cfg.CacheTypeV),
+			P.MaxTokens, P.Temperature, prompt))
+		sb.WriteString(fmt.Sprintf("%s,%d,%d,%d,",
+			cfg.Name, cfg.ContextWindow, cfg.NBatch, cfg.NUBatch))
 		sb.WriteString(fmt.Sprintf("%d,%s,%d,%d,%d,%d,%d,",
 			r.MaxSize, r.Image,
 			r.ImageInfo.OriginalW, r.ImageInfo.OriginalH,
@@ -546,7 +560,7 @@ func saveCSV(info BenchmarkInfo, results []AggregatedResult) {
 	}
 
 	// Save individual results
-	individualFile := fmt.Sprintf("performVis_ind_%s.csv", timestamp)
+	individualFile := fmt.Sprintf("results/performVis_ind_%s.csv", timestamp)
 	sb.Reset()
 	sb.WriteString("config,max_size,image,run,elapsed_ms,in_tok,out_tok,tps,description,error\n")
 
