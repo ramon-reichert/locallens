@@ -31,18 +31,13 @@ const (
 	DefaultRepetitions = 2
 )
 
-var defaultMaxSizes = []int{128, 256, 384} //64, 128, 256, 384, 512
+var defaultMaxSizes = []int{384} //64, 128, 256, 384, 512
 
 var defaultConfigs = []ConfigVariant{
 	{"small", 1024, 8, 8, 300, 0.1},
 }
 
-var systemPrompt = ""
-
-// `You extract image keywords for semantic search.
-// Output format: single comma-separated list of short phrases.
-// Include both general and specific terms.
-// No articles (a, the), no filler words.`
+var systemPrompt = "You extract image keywords for semantic search."
 
 var userPrompt = `Describe this image in detail. Include: 
 objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.`
@@ -144,7 +139,7 @@ func TestVisionPerformance(t *testing.T) {
 	}
 
 	var results []AggregatedResult
-	gpuLayers := int32(10)
+
 	for _, cfg := range defaultConfigs {
 		fmt.Print(strings.Repeat("=", 100))
 		fmt.Printf("\n\n    === Config: %s (ctx=%d, Nbatch=%d, NUbatch=%d, maxTok=%d, temp=%v) | %d repetitions ===\n\n",
@@ -158,7 +153,6 @@ func TestVisionPerformance(t *testing.T) {
 			NUBatch:       cfg.NUBatch,
 			CacheTypeK:    model.GGMLTypeQ8_0,
 			CacheTypeV:    model.GGMLTypeQ8_0,
-			NGpuLayers:    &gpuLayers,
 		})
 		if err != nil {
 			fmt.Printf("config %s failed to load: %v\n", cfg.Name, err)

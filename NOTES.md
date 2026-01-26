@@ -6,7 +6,7 @@
 - Run the tool inside local explorer browsers;
 - Run the tool inside photographers apps (adobe,etc);
 - Run it in mobile;
-- Configuration adaptable to the user hardware constrains;
+- Configuration adaptable to the user hardware constraints;
 - LocalEars to audio files;
 - LocalMovs to video files;
 - Concurrent improvments;
@@ -16,37 +16,44 @@
 # To-do:
 
 - System prompt
-- Sequential prompts
 - Kronk and system metrics
 - Search for "TODO" along the codebase;
 
 # Issues
 
-- How to display best scored images? A list, a link, a preview screen? 
+- How to display best scored images? A list, a link, a preview screen?
+- Similar tools[https://www.google.com/search?q=search+my+photos+offline+photographer&sca_esv=6cda7a6ffd36fe53&rlz=1C1CHZN_pt-brBR949BR949&sxsrf=ANbL-n6odB5tPvr0NwCsWpLzPjT9f_4tAg%3A1769308487234&ei=R4F1afmGDoXc5OUP9p3W-AY&oq=search+my+photos+offline+photograper&gs_lp=Egxnd3Mtd2l6LXNlcnAiJHNlYXJjaCBteSBwaG90b3Mgb2ZmbGluZSBwaG90b2dyYXBlcioCCAAyBxAhGKABGAoyBxAhGKABGApIpJcBUMgLWLyEAXAGeACQAQCYAeABoAHxGKoBBjAuMTcuMrgBA8gBAPgBAZgCGaAC-xnCAggQABiwAxjvBcICBRAAGO8FwgIFECEYoAHCAgUQIRifBZgDAIgGAZAGBJIHBjYuMTcuMqAH6FeyBwYwLjE3LjK4B-EZwgcHMC4xMC4xNcgHToAIAA&sclient=gws-wiz-serp]
 
-# Performance
+# Performance and configs
 
 - Goals:      | accurate image description | fast description process | low hardware demand |
               |-----------------------------------------------------------------------------|
-    Needs     | right prompt to mor outTok | small maxSize            | not tracking yet but|
-  Constrains  | min viable maxSize         |                          | can be causing fails|
+    Needs     | outTok > 200               | small maxSize            | not tracking yet but|
+  Constrains  | min viable maxSize         | outToks > 200            | can be causing fails|
+
+### Considerations:
+
+- Many outToks(≈250) are needed to get good descriptions(IT IS A MUST), but there is no need for more thah maxTok=300;
+- I found that format restrictive prompts were preventing the model to "talk". Just asking the model to describe the image made it beatifully output 400 good tokens! With such good descriptions, the challenge is control inference time and add a step to convert these descriptions into embedable short phrases;
+
+- Temperature is set to 0.1 because we want: "same description to same image" every time;
+- Can we have more predictable descriptions using a system prompt? YES, THEY SEEM TO BE MORE CONCISE. Can be re-evaluated after search tests.
+- Can we achieve more detailed descriptions sending separated prompts for each category(people characteristics, actions, etc)? NO, FOR NOW.
+
+- Image maxSize directly impacts inference time. 128px - 17s | 256px - 23s | 384px - 31s
+- 384px provide more precise descriptions (text, context, small details). Can be re-evaluated after search tests. 
+
+- Big image maxSize(>384px) and restrictive/demanding prompts can cause model hallucinations when running with limited hardware as mine. These two factors showed up to play a higher role in performance than model configs(considering viable values, at least) as cxtWindow, Nbatch and NUbatch.
+- The model size itself and its quantization value, as the projection file attached, impacts the hardware demand. Current using small ones, with good behavior of descriptions achieved. Can try even smaller configs later.
+- Not using GPUs for now. Can dig it furter later.
+
+- Tokens/sec seems not to be related with config or image size. It remains aprox. 14-15 tok/s. Maybe it is related just with hardware?
+
+- inToks is always the same, despite model config and image maxSize. Maybe it is related with the prompt? YES
 
 
-- Image maxSize directly impacts inference time. Ratio: time∝(image size)n, n≈2.2–2.3 => 256px - 6s | 384px - 14,8s | 512px - 28,3s
-- Getting good descriptions more often with maxSize 128px than with 512px. Propably due to hardware constrains.
 
-- Tokens/sec seems not to be related with config or image size. It remains aprox. 14-15 tok/s. Maybe it is related with hardware?
-
-- Input tokens is always the same, despite model config, with a minimun viable maxToken value. Maybe it is related with the prompt? YES
-
-- outToks = maxToks+1 means that the model halucinated! Sanity check added.
-- outToks < 30 means poor descriptions. Saninty check added. Can be better tuned later.
-- Output tokens varies a lot between equal repetitions. Some outstanding descriptions (many outToks) side by side with poor ones in identical runs. Need track hardware metrics to see why is it happening;
-
-- Can we have more predictable descriptions using a system prompt? YES
-- Can we achieve more detailed descriptions sending separated prompts for each category(people characteristics, actions, etc)?
-
-- Some performance test outputs:
+### Some performance test outputs:
 
 ======================================================================================
 CONFIGS
