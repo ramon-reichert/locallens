@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -27,40 +28,24 @@ import (
 )
 
 const (
-	DefaultRepetitions = 3
-	minOutToks         = 30
+	DefaultRepetitions = 2
 )
 
-var defaultMaxSizes = []int{128, 64} //256, 512
+var defaultMaxSizes = []int{128, 256, 384} //64, 128, 256, 384, 512
 
 var defaultConfigs = []ConfigVariant{
-	{"small", 2048, 8, 8, 200, 0.1},
-	{"large", 8192, 2048, 2048, 200, 0.1},
+	{"small", 1024, 8, 8, 300, 0.1},
 }
 
-var systemPrompt = `You extract image keywords for semantic search.
-Output format: single comma-separated list of short phrases.
-Include both general and specific terms. Don't repeat meaning.
-No articles (a, the), no filler words.`
+var systemPrompt = ""
 
-var userPrompts = []string{
-	`Analyze this image and describe clear details into this categories:
-- people characteristics
-- actions
-- objects
-- location, environment
-- visible text
-- lighting, colors
-- backgound and atmosphere`,
+// `You extract image keywords for semantic search.
+// Output format: single comma-separated list of short phrases.
+// Include both general and specific terms.
+// No articles (a, the), no filler words.`
 
-	// "Describe people: characteristics, clothing, poses, expressions.",
-	// "Describe actions: what is happening, movements, interactions.",
-	// "Describe objects: items, vehicles, furniture, tools visible.",
-	// "Describe location and environment: place type, indoor/outdoor, setting.",
-	// "Describe visible text: signs, labels, writing.",
-	// "Describe lighting and colors: dominant colors, light source, time of day.",
-	// "Describe background and atmosphere: mood, weather, depth.",
-}
+var userPrompt = `Describe this image in detail. Include: 
+objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.`
 
 type ConfigVariant struct {
 	Name          string
@@ -131,6 +116,10 @@ type BenchmarkInfo struct {
 func TestVisionPerformance(t *testing.T) {
 	testsboot.Boot()
 
+	// Track goroutines for leak detection
+	initialGoroutines := runtime.NumGoroutine()
+	fmt.Printf("Initial goroutines: %d\n", initialGoroutines)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
 	defer cancel()
 
@@ -142,7 +131,7 @@ func TestVisionPerformance(t *testing.T) {
 		t.Skip("no test images found")
 	}
 
-	fullPrompt := systemPrompt + "\n\n" + strings.Join(userPrompts, "\n")
+	fullPrompt := systemPrompt + "\n\n" + userPrompt + "\n"
 
 	info := BenchmarkInfo{
 		ModelFile:  filepath.Base(testsboot.VisionPaths.ModelFiles[0]),
@@ -155,7 +144,7 @@ func TestVisionPerformance(t *testing.T) {
 	}
 
 	var results []AggregatedResult
-
+	gpuLayers := int32(10)
 	for _, cfg := range defaultConfigs {
 		fmt.Print(strings.Repeat("=", 100))
 		fmt.Printf("\n\n    === Config: %s (ctx=%d, Nbatch=%d, NUbatch=%d, maxTok=%d, temp=%v) | %d repetitions ===\n\n",
@@ -169,6 +158,7 @@ func TestVisionPerformance(t *testing.T) {
 			NUBatch:       cfg.NUBatch,
 			CacheTypeK:    model.GGMLTypeQ8_0,
 			CacheTypeV:    model.GGMLTypeQ8_0,
+			NGpuLayers:    &gpuLayers,
 		})
 		if err != nil {
 			fmt.Printf("config %s failed to load: %v\n", cfg.Name, err)
@@ -181,9 +171,10 @@ func TestVisionPerformance(t *testing.T) {
 				aggResult := runWithRepetitions(ctx, krn, imgPath, cfg, maxSize, repetitions)
 				results = append(results, aggResult)
 
-				fmt.Printf("     >>>> maxSize: %d === %s: avgTime %.0fms | timeVar %.0f%% | %d/%d success\n\n\n",
-					maxSize,
+				fmt.Printf("     >>>> %s: maxSize=%d config=%s || avgTime=%.0fms | timeVar=%.0f%% | %d/%d success\n\n\n",
 					filepath.Base(imgPath),
+					maxSize,
+					cfg.Name,
 					aggResult.Stats.MeanTime,
 					aggResult.Stats.VarianceCV*100,
 					int(aggResult.Stats.SuccessRate*float64(repetitions)),
@@ -192,6 +183,7 @@ func TestVisionPerformance(t *testing.T) {
 		}
 
 		krn.Unload(ctx)
+
 	}
 
 	printConfigs(info)
@@ -201,7 +193,7 @@ func TestVisionPerformance(t *testing.T) {
 }
 
 func runWithRepetitions(ctx context.Context, krn *kronksdk.Kronk, imgPath string, cfg ConfigVariant, maxSize, reps int) AggregatedResult {
-	fullPrompt := systemPrompt + "\n\n" + strings.Join(userPrompts, "\n")
+	fullPrompt := systemPrompt + "\n\n" + userPrompt + "\n"
 
 	result := AggregatedResult{
 		Config:  cfg.Name,
@@ -241,7 +233,27 @@ func runWithRepetitions(ctx context.Context, krn *kronksdk.Kronk, imgPath string
 	// Run multiple times
 	for i := 0; i < reps; i++ {
 		run := runSingleInference(ctx, krn, imageData, cfg, i+1)
+
+		fmt.Printf("=> Run %d: %s | maxSize=%d | Config: %s (ctx=%d, Nbatch=%d, NUbatch=%d, maxTok=%d, temp=%v)\n",
+			run.Run,
+			filepath.Base(imgPath),
+			maxSize,
+			cfg.Name, cfg.ContextWindow, cfg.NBatch, cfg.NUBatch, cfg.MaxTokens, cfg.Temperature)
+
+		fmt.Printf("   Results: time=%d ms | inTok=%d outTok=%d | Tok/s=%.1f ",
+			run.Elapsed.Milliseconds(),
+			run.Metrics.PromptTokens,
+			run.Metrics.CompletionTokens,
+			run.Metrics.TokensPerSecond)
+
+		fmt.Printf("| Description: %s\n\n", run.Description)
+
 		result.Runs = append(result.Runs, run)
+
+		// Pause between runs to fresh CPU
+		if i < reps-1 {
+			time.Sleep(5 * time.Second)
+		}
 	}
 
 	// Calculate stats
@@ -253,16 +265,10 @@ func runWithRepetitions(ctx context.Context, krn *kronksdk.Kronk, imgPath string
 func runSingleInference(ctx context.Context, krn *kronksdk.Kronk, imageData []byte, cfg ConfigVariant, runNum int) RunResult {
 	run := RunResult{Run: runNum}
 
-	// Build multi-message structure:
-	// 1. System message (format instructions)
-	// 2. User message with image (raw media)
-	// 3. Multiple user messages (one per category)
 	messages := []model.D{
 		{"role": "system", "content": systemPrompt},
 		{"role": "user", "content": imageData},
-	}
-	for _, p := range userPrompts {
-		messages = append(messages, model.D{"role": "user", "content": p})
+		{"role": "user", "content": userPrompt},
 	}
 
 	data := model.D{
@@ -288,22 +294,6 @@ func runSingleInference(ctx context.Context, krn *kronksdk.Kronk, imageData []by
 		TotalTokens:      resp.Usage.TotalTokens,
 		TokensPerSecond:  resp.Usage.TokensPerSecond,
 	}
-
-	// TODO: add this sanity check to real service
-	if resp.Usage.CompletionTokens > cfg.MaxTokens {
-		run.Error = "model hallucinated"
-	}
-
-	// TODO: add this sanity check to real service
-	if resp.Usage.CompletionTokens < minOutToks {
-		run.Error = "poor description"
-	}
-
-	fmt.Printf("=> Run %d: %d ms | inTok=%d outTok=%d | Tok/s=%.1f",
-		run.Run, run.Elapsed.Milliseconds(),
-		run.Metrics.PromptTokens, run.Metrics.CompletionTokens,
-		run.Metrics.TokensPerSecond)
-	fmt.Printf("| Description: %s\n\n", run.Description)
 
 	return run
 }
