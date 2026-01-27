@@ -16,6 +16,7 @@
 # To-do:
 
 - Kronk and system metrics
+- Embedding
 - Search for "TODO" along the codebase;
 
 # Issues
