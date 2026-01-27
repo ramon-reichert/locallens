@@ -11,8 +11,9 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"runtime"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -29,14 +30,16 @@ import (
 	"github.com/ramon-reichert/locallens/internal/service/tests/testsboot"
 )
 
+var decodeErrorRegex = regexp.MustCompile(`(?:non-zero|code):\s*(-?\d+)`)
+
 const (
 	DefaultRepetitions = 2
 
 	// Pressure detection thresholds
-	ThresholdMsPerTokenMultiplier = 2.0  // Flag if MsPerToken > baseline * this
-	ThresholdPageFaults           = 100  // Flag if page faults delta > this
-	ThresholdLowRAM_MB            = 500  // Flag if available RAM < this (MB)
-	ThresholdMinOutputLen         = 20   // Flag if output length < this
+	ThresholdMsPerTokenMultiplier = 2.0 // Flag if MsPerToken > baseline * this
+	ThresholdPageFaults           = 100 // Flag if page faults delta > this
+	ThresholdLowRAM_MB            = 500 // Flag if available RAM < this (MB)
+	ThresholdMinOutputLen         = 20  // Flag if output length < this
 )
 
 var defaultMaxSizes = []int{384} //64, 128, 256, 384, 512
@@ -73,19 +76,48 @@ type ModelMetrics struct {
 }
 
 type SystemMetrics struct {
-	AvailableRAM_MB   uint64
-	PageFaultsDelta   uint64
+	AvailableRAM_MB uint64
+	PageFaultsDelta uint64
 }
 
 type PressureFlags struct {
-	SlowToken  bool
-	HighFaults bool
-	LowRAM     bool
-	Truncated  bool
+	SlowToken       bool
+	HighFaults      bool
+	LowRAM          bool
+	Truncated       bool
+	DecodeErrorCode int // 0=none, 1=KV cache full, 2=aborted, -1=invalid batch, <-1=fatal
 }
 
 func (f PressureFlags) Any() bool {
-	return f.SlowToken || f.HighFaults || f.LowRAM || f.Truncated
+	return f.SlowToken || f.HighFaults || f.LowRAM || f.Truncated || f.DecodeErrorCode != 0
+}
+
+// TODO: Return defined error types in sdk\kronk\model\model.go:635 to prevent parsing the error string
+func (f PressureFlags) DecodeErrorString() string {
+	switch f.DecodeErrorCode {
+	case 0:
+		return ""
+	case 1:
+		return "[DECODE:1-KV_CACHE_FULL]"
+	case 2:
+		return "[DECODE:2-ABORTED]"
+	case -1:
+		return "[DECODE:-1-INVALID_BATCH]"
+	default:
+		return fmt.Sprintf("[DECODE:%d-FATAL]", f.DecodeErrorCode)
+	}
+}
+
+func extractDecodeErrorCode(errMsg string) int {
+	matches := decodeErrorRegex.FindStringSubmatch(errMsg)
+	if len(matches) < 2 {
+		return 0
+	}
+	code, err := strconv.Atoi(matches[1])
+	if err != nil {
+		return 0
+	}
+	return code
 }
 
 type RunResult struct {
@@ -138,10 +170,6 @@ type BenchmarkInfo struct {
 
 func TestVisionPerformance(t *testing.T) {
 	testsboot.Boot()
-
-	// Track goroutines for leak detection
-	initialGoroutines := runtime.NumGoroutine()
-	fmt.Printf("Initial goroutines: %d\n", initialGoroutines)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Minute)
 	defer cancel()
@@ -252,6 +280,7 @@ func runWithRepetitions(ctx context.Context, krn *kronksdk.Kronk, imgPath string
 	}
 
 	// Run multiple times
+	// TODO: This is bad relationship! Should find a normal ratio between Tok/s and ms/tok. Not use a baseline!
 	// First run establishes baseline MsPerToken (use 0 for first run)
 	var baselineMsPerToken float64
 	for i := 0; i < reps; i++ {
@@ -262,13 +291,13 @@ func runWithRepetitions(ctx context.Context, krn *kronksdk.Kronk, imgPath string
 			baselineMsPerToken = run.Metrics.MsPerToken
 		}
 
-		fmt.Printf("=> Run %d: %s | maxSize=%d | Config: %s (ctx=%d, Nbatch=%d, NUbatch=%d) | maxTok=%d, temp=%.1f\n",
+		fmt.Printf("=> Run %d: %s | maxSize=%d | Config: %s (ctx=%d, Nbatch=%d, NUbatch=%d) | maxTok=%d, temp=%.1f",
 			run.Run,
 			filepath.Base(imgPath),
 			maxSize,
 			cfg.Name, cfg.ContextWindow, cfg.NBatch, cfg.NUBatch, P.MaxTokens, P.Temperature)
 
-		fmt.Printf("   Results: time=%d ms | inTok=%d outTok=%d | Tok/s=%.1f | ms/tok=%.1f",
+		fmt.Printf("\n   Results: time=%d ms | inTok=%d outTok=%d | Tok/s=%.1f | ms/tok=%.1f",
 			run.Elapsed.Milliseconds(),
 			run.Metrics.PromptTokens,
 			run.Metrics.CompletionTokens,
@@ -276,7 +305,7 @@ func runWithRepetitions(ctx context.Context, krn *kronksdk.Kronk, imgPath string
 			run.Metrics.MsPerToken)
 
 		// Print system metrics
-		fmt.Printf(" | RAM=%dMB pgFaults=%d",
+		fmt.Printf("\n   Memory: avlbRAM=%dMB pgFaults=%d",
 			run.System.AvailableRAM_MB,
 			run.System.PageFaultsDelta)
 
@@ -284,20 +313,27 @@ func runWithRepetitions(ctx context.Context, krn *kronksdk.Kronk, imgPath string
 		if run.Flags.Any() {
 			fmt.Print(" | FLAGS:")
 			if run.Flags.SlowToken {
-				fmt.Print(" [SLOW]")
+				fmt.Print(" [SlowToks]")
 			}
 			if run.Flags.HighFaults {
-				fmt.Print(" [FAULTS]")
+				fmt.Print(" [HiFaults]")
 			}
 			if run.Flags.LowRAM {
-				fmt.Print(" [LOWRAM]")
+				fmt.Print(" [LowRAM]")
 			}
 			if run.Flags.Truncated {
-				fmt.Print(" [TRUNC]")
+				fmt.Print(" [TructOut]")
+			}
+			if run.Flags.DecodeErrorCode != 0 {
+				fmt.Print(" " + run.Flags.DecodeErrorString())
 			}
 		}
 
 		fmt.Printf("\n   Description: %s\n\n", run.Description)
+		if run.Error != "" {
+			fmt.Printf("   Error: %s\n", run.Error)
+		}
+		fmt.Println()
 
 		result.Runs = append(result.Runs, run)
 
@@ -344,10 +380,13 @@ func runSingleInference(ctx context.Context, krn *kronksdk.Kronk, imageData []by
 
 	if err != nil {
 		run.Error = fmt.Sprintf("chat: %v", err)
+		run.Flags.DecodeErrorCode = extractDecodeErrorCode(err.Error())
 		return run
 	}
 
 	run.Description = resp.Choice[0].Message.Content
+
+	// TODO: Shoud be measured by tokens, no characters.
 	run.OutputLen = len(run.Description)
 
 	// Calculate MsPerToken

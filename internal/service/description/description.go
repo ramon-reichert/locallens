@@ -22,7 +22,7 @@ var (
 
 	P = Prompt{
 		SystemPrompt: "You extract image keywords for semantic search.",
-		UserPrompt: `Describe this image in detail. Include: 
+		UserPrompt: `Describe this image in detail. Include:
 objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.`,
 		MaxTokens:   300,
 		Temperature: 0.1,
