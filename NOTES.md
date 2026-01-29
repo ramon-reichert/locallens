@@ -15,7 +15,10 @@
 
 # To-do:
 
-- Kronk and system metrics (defined error returns from evalChunk) (TODOS about LowTok and Trunct) (adjust pagefaults/SECOND)
+- Kronk and system metrics
+  - Kronk PR
+  - (TODOS about LowTok and Trunct) 
+  - (adjust pagefaults/SECOND)
 - Embedding
 - Search for "TODO" along the codebase;
 

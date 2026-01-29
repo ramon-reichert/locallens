@@ -3,6 +3,7 @@ package performance
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	stdimage "image"
 	_ "image/gif"
@@ -11,9 +12,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -30,10 +29,8 @@ import (
 	"github.com/ramon-reichert/locallens/internal/service/tests/testsboot"
 )
 
-var decodeErrorRegex = regexp.MustCompile(`(?:non-zero|code):\s*(-?\d+)`)
-
 const (
-	DefaultRepetitions = 2
+	DefaultRepetitions = 1
 
 	// Pressure detection thresholds
 	ThresholdMsPerTokenMultiplier = 2.0 // Flag if MsPerToken > baseline * this
@@ -42,10 +39,11 @@ const (
 	ThresholdMinOutputLen         = 20  // Flag if output length < this
 )
 
-var defaultMaxSizes = []int{384} //64, 128, 256, 384, 512
+var defaultMaxSizes = []int{512, 384} //64, 128, 256, 384, 512
 
 var defaultConfigs = []ConfigVariant{
 	{"small", 1024, 8, 8, model.GGMLTypeQ8_0, model.GGMLTypeQ8_0},
+	{"medium", 1024, 512, 512, model.GGMLTypeQ8_0, model.GGMLTypeQ8_0},
 }
 
 var P = description.P
@@ -86,38 +84,11 @@ type PressureFlags struct {
 	LowRAM          bool
 	Truncated       bool
 	DecodeErrorCode int // 0=none, 1=KV cache full, 2=aborted, -1=invalid batch, <-1=fatal
+	DecodeErrorMsg  string
 }
 
 func (f PressureFlags) Any() bool {
 	return f.SlowToken || f.HighFaults || f.LowRAM || f.Truncated || f.DecodeErrorCode != 0
-}
-
-// TODO: Return defined error types in sdk\kronk\model\model.go:635 to prevent parsing the error string
-func (f PressureFlags) DecodeErrorString() string {
-	switch f.DecodeErrorCode {
-	case 0:
-		return ""
-	case 1:
-		return "[DECODE:1-KV_CACHE_FULL]"
-	case 2:
-		return "[DECODE:2-ABORTED]"
-	case -1:
-		return "[DECODE:-1-INVALID_BATCH]"
-	default:
-		return fmt.Sprintf("[DECODE:%d-FATAL]", f.DecodeErrorCode)
-	}
-}
-
-func extractDecodeErrorCode(errMsg string) int {
-	matches := decodeErrorRegex.FindStringSubmatch(errMsg)
-	if len(matches) < 2 {
-		return 0
-	}
-	code, err := strconv.Atoi(matches[1])
-	if err != nil {
-		return 0
-	}
-	return code
 }
 
 type RunResult struct {
@@ -325,7 +296,7 @@ func runWithRepetitions(ctx context.Context, krn *kronksdk.Kronk, imgPath string
 				fmt.Print(" [TructOut]")
 			}
 			if run.Flags.DecodeErrorCode != 0 {
-				fmt.Print(" " + run.Flags.DecodeErrorString())
+				fmt.Printf(" [DECODE:%d-%s]", run.Flags.DecodeErrorCode, run.Flags.DecodeErrorMsg)
 			}
 		}
 
@@ -380,8 +351,11 @@ func runSingleInference(ctx context.Context, krn *kronksdk.Kronk, imageData []by
 
 	if err != nil {
 		run.Error = fmt.Sprintf("chat: %v", err)
-		run.Flags.DecodeErrorCode = extractDecodeErrorCode(err.Error())
-		return run
+		var errDecode model.ErrDecode
+		if errors.As(err, &errDecode) {
+			run.Flags.DecodeErrorCode = errDecode.Code
+			run.Flags.DecodeErrorMsg = errDecode.Message
+		}
 	}
 
 	run.Description = resp.Choice[0].Message.Content
