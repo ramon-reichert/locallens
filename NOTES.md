@@ -11,15 +11,15 @@
 - LocalMovs to video files;
 - Concurrent improvments;
 - Include subfolders in search
-- Add flags and/or description to files metadata and give option to re-desrcirbe
+- Add flags and/or description to files metadata and give option to re-describe
 
 # To-do:
 
-- Kronk and system metrics
-  - Kronk PR
+- Embedding
+- Kronk and system metrics at vision_perf_test.go:
+  - See if batching for media models are working and get the returned error codes;
   - (TODOS about LowTok and Trunct) 
   - (adjust pagefaults/SECOND)
-- Embedding
 - Search for "TODO" along the codebase;
 
 # Issues
@@ -51,7 +51,7 @@
 - The restrictive/demanding prompts don't cause KV_cache_full error, but increase a lot the time/tokes and cause truncated(few tokens) response.
 - The hallucinated responses (randomly repetead words forever) could not be precisely associated with some test case yet. More often when KVcache Q4_0 than Q8_0;
 - The model size itself and its quantization value, as the projection file attached, impacts the hardware demand. Current using small ones, with good behavior of descriptions achieved. Can try even smaller configs later.
-- Not using GPUs for now. Can dig it furter later.
+- Not using GPUs for now. Can dig it further later.
 
 - Tokens/sec seems not to be related with config or image size. It remains aprox. 14-15 tok/s. Maybe it is related just with hardware?
 

@@ -98,6 +98,9 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string) error {
 			continue
 		}
 
+		//	fmt.Printf("Descripton: %v\n\n", desc)	DEBUG CODE
+		//	fmt.Printf("Embedding generated: %v\n\n", vec)
+
 		s.Index.Add(index.Entry{
 			Path:        imgPath,
 			Description: desc,

@@ -4,6 +4,7 @@ package kronk
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/ardanlabs/kronk/sdk/kronk"
@@ -53,7 +54,9 @@ func DownloadModels(ctx context.Context, log logger.Logger) (ModelPaths, error) 
 
 	log(ctx, "downloading models")
 
-	mdls, err := models.New()
+	basePath := os.Getenv("KRONK_BASE_PATH")
+
+	mdls, err := models.NewWithPaths(basePath)
 	if err != nil {
 		return ModelPaths{}, fmt.Errorf("models new: %w", err)
 	}

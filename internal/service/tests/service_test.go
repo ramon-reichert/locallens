@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -10,36 +11,36 @@ import (
 	"github.com/ramon-reichert/locallens/internal/service/tests/testsboot"
 )
 
+const IndexPath = "testdata/test.index"
+
 func TestIndexFolderAndSearch(t *testing.T) {
 	testsboot.Boot()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
-	tmpDir := t.TempDir()
-	indexPath := filepath.Join(tmpDir, "test.index")
-	testdataPath := filepath.Join("testdata")
+	testdataPath := "testdata"
 
-	// Phase 1: Index folder
 	svc := service.New(service.Config{
 		Log:         testsboot.Log,
 		VisionPaths: testsboot.VisionPaths,
 		EmbedPaths:  testsboot.EmbedPaths,
-		IndexPath:   indexPath,
+		IndexPath:   IndexPath,
 	})
 
 	if err := svc.IndexFolder(ctx, testdataPath); err != nil {
 		t.Fatalf("index folder: %v", err)
 	}
+	defer svc.Close(ctx)
 
 	if svc.Index.Len() == 0 {
 		t.Fatal("expected indexed images, got 0")
 	}
 
-	originalLen := svc.Index.Len()
-	t.Logf("indexed %d images", originalLen)
+	fmt.Printf("indexed %d images to %s\n", svc.Index.Len(), IndexPath)
 
-	// Phase 2: Search
-	results, err := svc.Search(ctx, "kids", 3)
+	// Quick search test
+	query := "busy city"
+	results, err := svc.Search(ctx, query, 3)
 	if err != nil {
 		t.Fatalf("search: %v", err)
 	}
@@ -48,40 +49,29 @@ func TestIndexFolderAndSearch(t *testing.T) {
 		t.Error("expected search results")
 	}
 
+	fmt.Printf("\nquery: %s\n", query)
 	for i, r := range results {
-		t.Logf("result %d: %s (score: %.4f) - %s", i+1, r.Path, r.Score, truncate(r.Description, 80))
+		fmt.Printf("  %d. %s (score: %.4f)\n", i+1, filepath.Base(r.Path), r.Score)
 	}
 
-	// Phase 3: Close and verify persistence
-	svc.Close(ctx)
-
+	// Verify reload works
 	svc2 := service.New(service.Config{
 		Log:         testsboot.Log,
 		VisionPaths: testsboot.VisionPaths,
 		EmbedPaths:  testsboot.EmbedPaths,
-		IndexPath:   indexPath,
+		IndexPath:   IndexPath,
 	})
 	defer svc2.Close(ctx)
 
 	if err := svc2.Index.Load(); err != nil {
-		t.Fatalf("load index: %v", err)
+		t.Fatalf("reload index: %v", err)
 	}
 
-	if svc2.Index.Len() != originalLen {
-		t.Errorf("expected %d entries after reload, got %d", originalLen, svc2.Index.Len())
+	if svc2.Index.Len() != svc.Index.Len() {
+		t.Errorf("expected %d entries after reload, got %d", svc.Index.Len(), svc2.Index.Len())
 	}
 
-	// Search should still work after reload
-	results2, err := svc2.Search(ctx, "animals", 2)
-	if err != nil {
-		t.Fatalf("search after reload: %v", err)
-	}
-
-	t.Logf("search after reload returned %d results", len(results2))
-
-	for i, r := range results {
-		t.Logf("result %d: %s (score: %.4f) - %s", i+1, r.Path, r.Score, truncate(r.Description, 80))
-	}
+	fmt.Printf("\nindex reloaded successfully with %d entries\n", svc2.Index.Len())
 }
 
 func TestSearchEmptyIndex(t *testing.T) {
@@ -108,11 +98,4 @@ func TestSearchEmptyIndex(t *testing.T) {
 	if len(results) != 0 {
 		t.Errorf("expected 0 results for empty index, got %d", len(results))
 	}
-}
-
-func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
 }

@@ -3,7 +3,6 @@ package performance
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	stdimage "image"
 	_ "image/gif"
@@ -39,11 +38,10 @@ const (
 	ThresholdMinOutputLen         = 20  // Flag if output length < this
 )
 
-var defaultMaxSizes = []int{512, 384} //64, 128, 256, 384, 512
+var defaultMaxSizes = []int{384} //64, 128, 256, 384, 512
 
 var defaultConfigs = []ConfigVariant{
 	{"small", 1024, 8, 8, model.GGMLTypeQ8_0, model.GGMLTypeQ8_0},
-	{"medium", 1024, 512, 512, model.GGMLTypeQ8_0, model.GGMLTypeQ8_0},
 }
 
 var P = description.P
@@ -351,10 +349,31 @@ func runSingleInference(ctx context.Context, krn *kronksdk.Kronk, imageData []by
 
 	if err != nil {
 		run.Error = fmt.Sprintf("chat: %v", err)
-		var errDecode model.ErrDecode
-		if errors.As(err, &errDecode) {
-			run.Flags.DecodeErrorCode = errDecode.Code
-			run.Flags.DecodeErrorMsg = errDecode.Message
+	}
+
+	// Check for decode errors via finish_reason="error" (Kronk's error pattern).
+	// Errors are returned in the response, not as Go errors.
+	if len(resp.Choice) > 0 && resp.Choice[0].FinishReason() == model.FinishReasonError {
+		errMsg := ""
+		if resp.Choice[0].Delta != nil {
+			errMsg = resp.Choice[0].Delta.Content
+		} else if resp.Choice[0].Message != nil {
+			errMsg = resp.Choice[0].Message.Content
+		}
+		run.Error = fmt.Sprintf("decode error: %s", errMsg)
+		run.Flags.DecodeErrorMsg = errMsg
+		// Map known error messages to codes for backward compatibility
+		switch {
+		case strings.Contains(errMsg, "context window is full"):
+			run.Flags.DecodeErrorCode = 1
+		case strings.Contains(errMsg, "cancelled"):
+			run.Flags.DecodeErrorCode = 2
+		case strings.Contains(errMsg, "input could not be processed"):
+			run.Flags.DecodeErrorCode = -1
+		case strings.Contains(errMsg, "internal error"):
+			run.Flags.DecodeErrorCode = -2
+		default:
+			run.Flags.DecodeErrorCode = -99 // Unknown error
 		}
 	}
 
@@ -714,7 +733,7 @@ func saveCSV(info BenchmarkInfo, results []AggregatedResult) {
 	prompt = strings.ReplaceAll(prompt, "\n", " ")
 
 	// Save grouped results
-	groupedFile := fmt.Sprintf("results/performVis_grp_%s.csv", timestamp)
+	groupedFile := fmt.Sprintf("results/vision/performVis_grp_%s.csv", timestamp)
 	var sb strings.Builder
 	sb.WriteString("model,mmproj,cache_k,cache_v,max_tok,temp,prompt,")
 	sb.WriteString("config,ctx_win,nbatch,nubatch,")
@@ -755,7 +774,7 @@ func saveCSV(info BenchmarkInfo, results []AggregatedResult) {
 	}
 
 	// Save individual results
-	individualFile := fmt.Sprintf("results/performVis_ind_%s.csv", timestamp)
+	individualFile := fmt.Sprintf("results/vision/performVis_ind_%s.csv", timestamp)
 	sb.Reset()
 	sb.WriteString("config,max_size,image,run,elapsed_ms,in_tok,out_tok,tps,ms_per_tok,")
 	sb.WriteString("avail_ram_mb,page_faults,flag_slow,flag_faults,flag_ram,flag_trunc,")
