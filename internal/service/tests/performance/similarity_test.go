@@ -15,7 +15,37 @@ import (
 	"github.com/ramon-reichert/locallens/internal/service/tests/testsboot"
 )
 
-var testQueries = []string{ //TODO: make a search with detailed queries from many images in the same context (e.g. wedding photos)
+// ------------------------------
+// search with detailed queries from many images in the same context - wedding photos:
+// const (
+// 	indexPath  = "B:/RAMON/Fechados/fotos/Fotos casorio/escolhidas tratadas 2/test.index"
+// 	resultsDir = "results/similarity"
+// )
+
+// var testQueries = []string{
+// 	"bride and groom hugging each other",
+// 	"receiving the blessings",
+// 	"procession leaving the church",
+// 	"The bride and groom at the altar with all the wedding party.",
+// 	"at the altar with all the godparents",
+// 	"bride and groom looking towards the altar",
+// 	"the wedding kiss",
+// 	"celebrating in front of the church",
+// 	"entering the wedding party",
+// 	"at the party with the grandparents",
+// 	"The bride and groom at the party with the best man and maid of honor.",
+// 	"newlyweds receiving communion",
+// 	"Only the bride and groom with the altar vault in the background.",
+// }
+
+// ------------------------------
+
+const (
+	indexPath  = "../testdata/test.index"
+	resultsDir = "results/similarity"
+)
+
+var testQueries = []string{
 	//specific:
 	"a bride with her bridesmaids",
 	"busy street with motorcycles",
@@ -29,11 +59,6 @@ var testQueries = []string{ //TODO: make a search with detailed queries from man
 	"at night",
 	"cartoon",
 }
-
-const (
-	indexPath  = "../testdata/test.index"
-	resultsDir = "results/similarity"
-)
 
 type queryResult struct {
 	query   string

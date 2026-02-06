@@ -8,4 +8,4 @@ test-unit:
 	CGO_ENABLED=0 go test -v -count=1 ./internal/service/tests/unittests/...
 
 test-service:
-	CGO_ENABLED=0 go test -v -count=1 ./internal/service/tests/service_test.go
+	CGO_ENABLED=0 go test -timeout 30m -v -count=1 ./internal/service/tests/service_test.go

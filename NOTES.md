@@ -1,5 +1,6 @@
 # Future features
 
+- Option to the user describe a common context of a set o images before the description -not the search- to ask the vision model to use more contextualized vocabulary and to pay more attention in what makes that image unique among the others in the same context. e.g.: search for a specific moment of the celebration among many wedding photos;
 - Adapt prompt and search to different idioms;
 - Face recognition;
 - Configurable detail vs speed;
@@ -15,7 +16,7 @@
 
 # To-do:
 
-- Embedding
+- Make tests more objective
 - Kronk and system metrics at vision_perf_test.go:
   - See if batching for media models are working and get the returned error codes;
   - (TODOS about LowTok and Trunct) 

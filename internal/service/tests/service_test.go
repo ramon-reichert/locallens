@@ -11,14 +11,14 @@ import (
 	"github.com/ramon-reichert/locallens/internal/service/tests/testsboot"
 )
 
-const IndexPath = "testdata/test.index"
+const testdataPath = "B:/RAMON/Fechados/fotos/Fotos casorio/escolhidas tratadas 2"
+
+var IndexPath = filepath.Join(testdataPath, "test.index")
 
 func TestIndexFolderAndSearch(t *testing.T) {
 	testsboot.Boot()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
-
-	testdataPath := "testdata"
 
 	svc := service.New(service.Config{
 		Log:         testsboot.Log,
