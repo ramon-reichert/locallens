@@ -53,7 +53,7 @@ func (e *Embedder) Load(ctx context.Context) error {
 	}
 
 	start := time.Now()
-	e.log(ctx, "loading embedding model")
+	e.log(ctx, "embedder load", "embedding model", e.paths.ModelFiles)
 
 	cfg := model.Config{
 		ModelFiles:     e.paths.ModelFiles,
@@ -71,9 +71,8 @@ func (e *Embedder) Load(ctx context.Context) error {
 	}
 
 	e.krn = krn
-	e.log(ctx, "embedding model loaded",
+	e.log(ctx, "embedder load",
 		"loading time", time.Since(start),
-		"context_window", krn.ModelConfig().ContextWindow,
 	)
 
 	return nil
@@ -88,7 +87,7 @@ func (e *Embedder) Unload(ctx context.Context) error {
 		return nil
 	}
 
-	e.log(ctx, "unloading embedding model")
+	e.log(ctx, "embedder unload")
 
 	if err := e.krn.Unload(ctx); err != nil {
 		return fmt.Errorf("unload embedding model: %w", err)
@@ -134,6 +133,6 @@ func (e *Embedder) Embed(ctx context.Context, text string) ([]float32, error) {
 		return nil, errors.New("no embedding data returned")
 	}
 
-	e.log(ctx, "embedding finished", "embedding time", time.Since(start))
+	e.log(ctx, "embed image", "elapsed time", time.Since(start))
 	return resp.Data[0].Embedding, nil
 }

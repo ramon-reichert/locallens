@@ -6,8 +6,6 @@ import (
 	"github.com/ramon-reichert/locallens/internal/service/search"
 )
 
-// TODO: Add conceptual search tests to see if its accurate.
-
 func TestFindTopK(t *testing.T) {
 	entries := []search.Entry{
 		{Path: "dog.jpg", Description: "A brown dog", Embedding: []float32{1, 0, 0, 0}},

@@ -70,7 +70,7 @@ func (d *Describer) Load(ctx context.Context) error {
 	}
 
 	start := time.Now()
-	d.log(ctx, "loading vision model")
+	d.log(ctx, "describer load", "vision model", d.paths.ModelFiles)
 
 	// TODO: tune this settings to fit app needs, maybe make it hardware dependent
 	cfg := model.Config{
@@ -89,10 +89,8 @@ func (d *Describer) Load(ctx context.Context) error {
 	}
 
 	d.krn = krn
-	d.log(ctx, "vision model loaded",
+	d.log(ctx, "describer load",
 		"loading time", time.Since(start),
-		"context_window", krn.ModelConfig().ContextWindow,
-		"template", krn.ModelInfo().Template.FileName,
 	)
 
 	return nil
@@ -107,7 +105,7 @@ func (d *Describer) Unload(ctx context.Context) error {
 		return nil
 	}
 
-	d.log(ctx, "unloading vision model")
+	d.log(ctx, "describer unload")
 
 	if err := d.krn.Unload(ctx); err != nil {
 		return fmt.Errorf("unload vision model: %w", err)
@@ -134,7 +132,7 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (string, err
 		return "", ErrModelNotLoaded
 	}
 
-	d.log(ctx, "\nresizing image", "path", imagePath)
+	d.log(ctx, "describe image", "resize to", image.DefaultMaxSide, "path", imagePath)
 
 	imageData, err := image.Resize(imagePath, image.DefaultMaxSide)
 	if err != nil {
@@ -153,8 +151,6 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (string, err
 		"max_tokens":  P.MaxTokens,
 	}
 
-	d.log(ctx, "describing image", "path", imagePath)
-
 	start := time.Now()
 
 	resp, err := krn.Chat(ctx, data)
@@ -164,6 +160,7 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (string, err
 
 	description := resp.Choice[0].Message.Content
 
-	d.log(ctx, "description finished", "elapsed", time.Since(start), "description", description)
+	d.log(ctx, "describe image", "elapsed time", time.Since(start), "description", description)
+	fmt.Println()
 	return description, nil
 }

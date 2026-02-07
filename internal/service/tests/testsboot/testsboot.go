@@ -1,7 +1,6 @@
 package testsboot
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"sync"
@@ -20,34 +19,24 @@ var (
 	Log         logger.Logger
 )
 
-// Boot initialize dependencies for tests once
+// Boot initializes Kronk and resolves model paths for tests.
+// Models and libraries must already be downloaded (run 'make setup').
 func Boot() {
 	once.Do(func() {
-		ctx := context.Background()
 		Log = logger.New()
 
-		fmt.Println("installing dependencies for tests")
-		if err := kronk.InstallDependencies(ctx, Log); err != nil {
-			fmt.Printf("install dependencies: %v\n", err)
-			os.Exit(1)
-		}
-
-		fmt.Println("downloading models for tests")
-		paths, err := kronk.DownloadModels(ctx, Log)
-		if err != nil {
-			fmt.Printf("download models: %v\n", err)
-			os.Exit(1)
-		}
-
-		VisionPaths = paths.Vision
-		EmbedPaths = paths.Embed
-
-		fmt.Println("initializing kronk")
 		if err := kronksdk.Init(); err != nil {
 			fmt.Printf("kronk init: %v\n", err)
 			os.Exit(1)
 		}
 
-		fmt.Println("test system initialized")
+		paths, err := kronk.ResolvePaths()
+		if err != nil {
+			fmt.Printf("resolve model paths: %v\n", err)
+			os.Exit(1)
+		}
+
+		VisionPaths = paths.Vision
+		EmbedPaths = paths.Embed
 	})
 }

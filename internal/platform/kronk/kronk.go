@@ -47,6 +47,29 @@ func InstallDependencies(ctx context.Context, log logger.Logger) error {
 	return nil
 }
 
+// ResolvePaths resolves the file paths for already-downloaded models.
+// Models must be downloaded first via `make setup`.
+func ResolvePaths() (ModelPaths, error) {
+	basePath := os.Getenv("KRONK_BASE_PATH")
+
+	mdls, err := models.NewWithPaths(basePath)
+	if err != nil {
+		return ModelPaths{}, fmt.Errorf("models new: %w", err)
+	}
+
+	vision, err := mdls.FullPath("Qwen2-VL-2B-Instruct-Q4_K_M")
+	if err != nil {
+		return ModelPaths{}, fmt.Errorf("resolve vision model: %w (run 'make setup' first)", err)
+	}
+
+	embed, err := mdls.FullPath("embeddinggemma-300m-qat-Q8_0")
+	if err != nil {
+		return ModelPaths{}, fmt.Errorf("resolve embed model: %w (run 'make setup' first)", err)
+	}
+
+	return ModelPaths{Vision: vision, Embed: embed}, nil
+}
+
 // DownloadModels downloads vision and embedding models.
 func DownloadModels(ctx context.Context, log logger.Logger) (ModelPaths, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Minute)

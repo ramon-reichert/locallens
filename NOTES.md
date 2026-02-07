@@ -16,7 +16,7 @@
 
 # To-do:
 
-- Make tests more objective
+- Make performance tests for the embedding too;
 - Kronk and system metrics at vision_perf_test.go:
   - See if batching for media models are working and get the returned error codes;
   - (TODOS about LowTok and Trunct) 

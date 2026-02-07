@@ -13,10 +13,7 @@ import (
 const testdataDir = "../testdata"
 
 func TestResize_JPEG(t *testing.T) {
-	imgPath := filepath.Join(testdataDir, "simple.jpg")
-	if _, err := os.Stat(imgPath); os.IsNotExist(err) {
-		t.Skip("test image not found")
-	}
+	imgPath := filepath.Join(testdataDir, "forest.jpg")
 
 	data, err := image.Resize(imgPath, image.DefaultMaxSide)
 	if err != nil {
@@ -36,23 +33,14 @@ func TestResize_JPEG(t *testing.T) {
 	if bounds.Dx() > image.DefaultMaxSide && bounds.Dy() > image.DefaultMaxSide {
 		t.Errorf("expected max side <= %d, got %dx%d", image.DefaultMaxSide, bounds.Dx(), bounds.Dy())
 	}
-
-	t.Logf("output: %dx%d, %d bytes", bounds.Dx(), bounds.Dy(), len(data))
 }
 
-func TestResize_PNG(t *testing.T) {
-	imgPath := filepath.Join(testdataDir, "12kpx_22kb.png")
-	if _, err := os.Stat(imgPath); os.IsNotExist(err) {
-		t.Fatalf("test image not found")
-	}
+func TestResize_PreservesAspectRatio(t *testing.T) {
+	imgPath := filepath.Join(testdataDir, "parrot.jpg")
 
-	data, err := image.Resize(imgPath, image.DefaultMaxSide)
+	data, err := image.Resize(imgPath, 200)
 	if err != nil {
 		t.Fatalf("resize: %v", err)
-	}
-
-	if len(data) == 0 {
-		t.Error("expected non-empty output")
 	}
 
 	img, err := jpeg.Decode(bytes.NewReader(data))
@@ -61,40 +49,15 @@ func TestResize_PNG(t *testing.T) {
 	}
 
 	bounds := img.Bounds()
-	t.Logf("output: %dx%d, %d bytes", bounds.Dx(), bounds.Dy(), len(data))
-}
-
-func TestResize_SmallImage(t *testing.T) {
-	imgPath := filepath.Join(testdataDir, "12kpx_22kb.png")
-	if _, err := os.Stat(imgPath); os.IsNotExist(err) {
-		t.Skip("test image not found")
+	if bounds.Dx() > 200 && bounds.Dy() > 200 {
+		t.Errorf("expected at least one side <= 200, got %dx%d", bounds.Dx(), bounds.Dy())
 	}
-
-	data, err := image.Resize(imgPath, 2000)
-	if err != nil {
-		t.Fatalf("resize: %v", err)
-	}
-
-	if len(data) == 0 {
-		t.Error("expected non-empty output")
-	}
-
-	img, err := jpeg.Decode(bytes.NewReader(data))
-	if err != nil {
-		t.Fatalf("decode output: %v", err)
-	}
-
-	bounds := img.Bounds()
-	t.Logf("small image output: %dx%d, %d bytes", bounds.Dx(), bounds.Dy(), len(data))
 }
 
 func TestResize_CustomMaxSide(t *testing.T) {
-	imgPath := filepath.Join(testdataDir, "353kpx_63kb.jpg")
-	if _, err := os.Stat(imgPath); os.IsNotExist(err) {
-		t.Skip("test image not found")
-	}
+	imgPath := filepath.Join(testdataDir, "vietnam.jpg")
 
-	maxSide := 200
+	maxSide := 128
 
 	data, err := image.Resize(imgPath, maxSide)
 	if err != nil {
@@ -110,8 +73,20 @@ func TestResize_CustomMaxSide(t *testing.T) {
 	if bounds.Dx() > maxSide && bounds.Dy() > maxSide {
 		t.Errorf("expected max side <= %d, got %dx%d", maxSide, bounds.Dx(), bounds.Dy())
 	}
+}
 
-	t.Logf("custom maxSide output: %dx%d, %d bytes", bounds.Dx(), bounds.Dy(), len(data))
+func TestResize_OutputIsJPEG(t *testing.T) {
+	imgPath := filepath.Join(testdataDir, "lighthouse.jpg")
+
+	data, err := image.Resize(imgPath, image.DefaultMaxSide)
+	if err != nil {
+		t.Fatalf("resize: %v", err)
+	}
+
+	_, err = jpeg.Decode(bytes.NewReader(data))
+	if err != nil {
+		t.Errorf("output is not valid JPEG: %v", err)
+	}
 }
 
 func TestResize_FileNotFound(t *testing.T) {

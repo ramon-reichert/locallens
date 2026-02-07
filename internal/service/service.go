@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/ardanlabs/kronk/sdk/tools/models"
 
@@ -61,7 +62,8 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string) error {
 		return nil
 	}
 
-	s.log(ctx, "found images", "count", len(images))
+	start := time.Now()
+	s.log(ctx, "index folder", "found images", len(images))
 
 	// Phase 1: Describe all images
 	descriptions := make(map[string]string) // key: image path
@@ -90,16 +92,13 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string) error {
 	}
 
 	for imgPath, desc := range descriptions {
-		s.log(ctx, "embedding description", "path", imgPath)
+		s.log(ctx, "embed image", "path", imgPath)
 
 		vec, err := s.embedder.Embed(ctx, desc)
 		if err != nil {
 			s.log(ctx, "embed error", "path", imgPath, "error", err)
 			continue
 		}
-
-		//	fmt.Printf("Descripton: %v\n\n", desc)	DEBUG CODE
-		//	fmt.Printf("Embedding generated: %v\n\n", vec)
 
 		s.Index.Add(index.Entry{
 			Path:        imgPath,
@@ -117,13 +116,16 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string) error {
 		return fmt.Errorf("save index: %w", err)
 	}
 
-	s.log(ctx, "indexing complete", "indexed", s.Index.Len())
+	s.log(ctx, "index folder", "indexed images", s.Index.Len(), "elapsed time", time.Since(start))
 
 	return nil
 }
 
 // Search finds images similar to the query text.
 func (s *Service) Search(ctx context.Context, query string, k int) ([]search.Result, error) {
+
+	s.log(ctx, "search images", "top k", k, "query", query)
+
 	if !s.embedder.IsLoaded() {
 		if err := s.embedder.Load(ctx); err != nil {
 			return nil, fmt.Errorf("load embedder: %w", err)
