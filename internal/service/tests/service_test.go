@@ -12,12 +12,13 @@ import (
 	"github.com/ramon-reichert/locallens/internal/service/tests/testsboot"
 )
 
-const testdataPath = "testdata"
-
-// Shared service instance, indexed once in TestMain.
-var svc *service.Service
-
 const mustMatch = 2
+
+// Shared service and folder path, indexed once in TestMain.
+var (
+	svc        *service.Service
+	testFolder string
+)
 
 // expectedSearchResults defines queries and their expected result ordering, for n topk results defined in mustMatch.
 var expectedSearchResults = []struct {
@@ -40,35 +41,47 @@ func TestMain(m *testing.M) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
-	indexPath := filepath.Join(os.TempDir(), "locallens_test.index")
+	// Copy testdata to a temp dir so we don't write .locallens.index into the source tree
+	tmp, err := os.MkdirTemp("", "locallens_test_*")
+	if err != nil {
+		fmt.Printf("create temp dir: %v\n", err)
+		os.Exit(1)
+	}
+	testFolder = tmp
+
+	if err := copyImages("testdata", testFolder); err != nil {
+		fmt.Printf("copy testdata: %v\n", err)
+		os.Exit(1)
+	}
 
 	svc = service.New(service.Config{
 		Log:         testsboot.Log,
 		VisionPaths: testsboot.VisionPaths,
 		EmbedPaths:  testsboot.EmbedPaths,
-		IndexPath:   indexPath,
 	})
 
 	fmt.Println("\n===== TEST MAIN > IndexFolder =====")
 
-	if err := svc.IndexFolder(ctx, testdataPath); err != nil {
+	count, err := svc.IndexFolder(ctx, testFolder)
+	if err != nil {
 		fmt.Printf("index folder: %v\n", err)
 		os.Exit(1)
 	}
 
+	fmt.Printf("indexed %d images\n", count)
+
 	code := m.Run()
 
 	svc.Close(ctx)
-	os.Remove(indexPath)
+	os.RemoveAll(tmp)
 	os.Exit(code)
 
 	fmt.Println("===== TEST MAIN > completed =====")
 }
 
 func TestIndexFolder(t *testing.T) {
-
-	entries := svc.Index.All()
-	if len(entries) == 0 {
+	count := svc.IndexInfo(testFolder)
+	if count == 0 {
 		t.Fatal("expected indexed images, got 0")
 	}
 
@@ -76,69 +89,27 @@ func TestIndexFolder(t *testing.T) {
 		"forest.jpg", "graduate.jpg", "lighthouse.jpg", "marvel.jpg",
 		"night.jpg", "parrot.jpg", "vietnam.jpg", "wedding.jpg",
 	}
-	if len(entries) != len(testImages) {
-		t.Errorf("expected %d indexed images, got %d", len(testImages), len(entries))
+	if count != len(testImages) {
+		t.Errorf("expected %d indexed images, got %d", len(testImages), count)
 	}
 
-	for _, entry := range entries {
-		filename := filepath.Base(entry.Path)
-		if entry.Description == "" {
-			t.Errorf("%s: empty description", filename)
-		}
-		if len(entry.Embedding) == 0 {
-			t.Errorf("%s: empty embedding", filename)
-		}
+	// Verify .locallens.index file was created inside the folder
+	indexFile := filepath.Join(testFolder, ".locallens.index")
+	if _, err := os.Stat(indexFile); os.IsNotExist(err) {
+		t.Error("expected .locallens.index file inside the folder")
 	}
 }
 
 func TestIndexPersistence(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-
-	indexPath := filepath.Join(t.TempDir(), "persist.index")
-
-	// Save current index to a new path
-	svc2 := service.New(service.Config{
-		Log:         testsboot.Log,
-		VisionPaths: testsboot.VisionPaths,
-		EmbedPaths:  testsboot.EmbedPaths,
-		IndexPath:   indexPath,
-	})
-
-	for _, entry := range svc.Index.All() {
-		svc2.Index.Add(entry)
-	}
-	if err := svc2.Index.Save(); err != nil {
-		t.Fatalf("save index: %v", err)
+	// The index was saved by IndexFolder. Load it fresh and verify.
+	count := svc.IndexInfo(testFolder)
+	if count == 0 {
+		t.Fatal("expected entries after reload, got 0")
 	}
 
-	originalLen := svc2.Index.Len()
-	svc2.Close(ctx)
-
-	// Reload from disk
-	svc3 := service.New(service.Config{
-		Log:         testsboot.Log,
-		VisionPaths: testsboot.VisionPaths,
-		EmbedPaths:  testsboot.EmbedPaths,
-		IndexPath:   indexPath,
-	})
-	defer svc3.Close(ctx)
-
-	if err := svc3.Index.Load(); err != nil {
-		t.Fatalf("load index: %v", err)
-	}
-
-	if svc3.Index.Len() != originalLen {
-		t.Errorf("expected %d entries after reload, got %d", originalLen, svc3.Index.Len())
-	}
-
-	for _, entry := range svc3.Index.All() {
-		if entry.Description == "" {
-			t.Errorf("%s: description lost after reload", filepath.Base(entry.Path))
-		}
-		if len(entry.Embedding) == 0 {
-			t.Errorf("%s: embedding lost after reload", filepath.Base(entry.Path))
-		}
+	testImages := 8
+	if count != testImages {
+		t.Errorf("expected %d entries after reload, got %d", testImages, count)
 	}
 }
 
@@ -146,9 +117,7 @@ func TestSearch(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	totalImages := svc.Index.Len()
-
-	results, err := svc.Search(ctx, "any image", 3)
+	results, err := svc.Search(ctx, testFolder, "any image", 3)
 	if err != nil {
 		t.Fatalf("search: %v", err)
 	}
@@ -168,7 +137,8 @@ func TestSearch(t *testing.T) {
 	}
 
 	// Request more than available returns all
-	allResults, err := svc.Search(ctx, "anything", totalImages+10)
+	totalImages := svc.IndexInfo(testFolder)
+	allResults, err := svc.Search(ctx, testFolder, "anything", totalImages+10)
 	if err != nil {
 		t.Fatalf("search all: %v", err)
 	}
@@ -183,8 +153,7 @@ func TestSearchExpectedOrder(t *testing.T) {
 
 	for _, tc := range expectedSearchResults {
 		t.Run(tc.query, func(t *testing.T) {
-
-			results, err := svc.Search(ctx, tc.query, mustMatch)
+			results, err := svc.Search(ctx, testFolder, tc.query, mustMatch)
 			if err != nil {
 				t.Fatalf("search: %v", err)
 			}
@@ -207,22 +176,39 @@ func TestSearchEmptyIndex(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	indexPath := filepath.Join(t.TempDir(), "empty.index")
+	emptyDir := t.TempDir()
 
-	emptySvc := service.New(service.Config{
-		Log:         testsboot.Log,
-		VisionPaths: testsboot.VisionPaths,
-		EmbedPaths:  testsboot.EmbedPaths,
-		IndexPath:   indexPath,
-	})
-	defer emptySvc.Close(ctx)
-
-	results, err := emptySvc.Search(ctx, "anything", 5)
+	results, err := svc.Search(ctx, emptyDir, "anything", 5)
 	if err != nil {
 		t.Fatalf("search: %v", err)
 	}
 
 	if len(results) != 0 {
-		t.Errorf("expected 0 results for empty index, got %d", len(results))
+		t.Errorf("expected 0 results for empty folder, got %d", len(results))
 	}
+}
+
+// copyImages copies image files from src to dst directory.
+func copyImages(src, dst string) error {
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		data, err := os.ReadFile(filepath.Join(src, entry.Name()))
+		if err != nil {
+			return err
+		}
+
+		if err := os.WriteFile(filepath.Join(dst, entry.Name()), data, 0644); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

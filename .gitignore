@@ -20,6 +20,9 @@
 *.swp
 *.swo
 
+# LocalLens index files
+.locallens.index
+
 # OS
 .DS_Store
 Thumbs.db

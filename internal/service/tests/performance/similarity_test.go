@@ -41,8 +41,8 @@ import (
 // ------------------------------
 
 const (
-	indexPath  = "../testdata/test.index"
-	resultsDir = "results/similarity"
+	testdataDir = "../testdata"
+	resultsDir  = "results/similarity"
 )
 
 var testQueries = []string{
@@ -67,28 +67,38 @@ type queryResult struct {
 
 func TestSimilarity(t *testing.T) {
 	testsboot.Boot()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
 
-	// Load existing index created by TestIndexFolderAndSearch
+	// Copy testdata to temp dir to avoid writing index into source tree
+	tmp := t.TempDir()
+	if err := copyDir(testdataDir, tmp); err != nil {
+		t.Fatalf("copy testdata: %v", err)
+	}
+
 	svc := service.New(service.Config{
 		Log:         testsboot.Log,
 		VisionPaths: testsboot.VisionPaths,
 		EmbedPaths:  testsboot.EmbedPaths,
-		IndexPath:   indexPath,
 	})
 	defer svc.Close(ctx)
 
-	if err := svc.Index.Load(); err != nil {
-		t.Fatalf("load index: %v (run TestIndexFolderAndSearch first)", err)
+	// Index the folder
+	count, err := svc.IndexFolder(ctx, tmp)
+	if err != nil {
+		t.Fatalf("index folder: %v", err)
 	}
 
-	entries := svc.Index.All()
-	if len(entries) == 0 {
-		t.Fatal("no images in index")
+	if count == 0 {
+		t.Fatal("no images indexed")
 	}
 
-	fmt.Printf("loaded %d images from index\n", len(entries))
+	fmt.Printf("indexed %d images\n", count)
+
+	// Load entries for CSV export
+	idx := index.New(filepath.Join(tmp, ".locallens.index"))
+	idx.Load()
+	entries := idx.All()
 
 	// Run similarity tests for each query
 	queryResults := make([]queryResult, 0, len(testQueries))
@@ -96,7 +106,7 @@ func TestSimilarity(t *testing.T) {
 	for _, query := range testQueries {
 		fmt.Printf("\nQuery: %q\n", query)
 
-		results, err := svc.Search(ctx, query, len(entries))
+		results, err := svc.Search(ctx, tmp, query, len(entries))
 		if err != nil {
 			t.Errorf("search %q: %v", query, err)
 			continue
@@ -127,12 +137,6 @@ func TestSimilarity(t *testing.T) {
 	fmt.Printf("\n\nResults saved to %s\n", csvPath)
 }
 
-// exportMatrixCSV creates a matrix-style CSV with queries as columns and descriptions on the right.
-// Layout:
-//
-//	Rank | query 1          | query 2          | ... | || | Filename    | Description
-//	1    | image.jpg (0.85) | other.jpg (0.82) | ... | || | image.jpg   | "The image..."
-//	2    | ...              | ...              | ... | || | other.jpg   | "A scene..."
 func exportMatrixCSV(path string, queryResults []queryResult, entries []index.Entry) error {
 	if len(queryResults) == 0 || len(entries) == 0 {
 		return fmt.Errorf("no data to export")
@@ -140,7 +144,6 @@ func exportMatrixCSV(path string, queryResults []queryResult, entries []index.En
 
 	var b strings.Builder
 
-	// Header row
 	b.WriteString("Rank")
 	for _, qr := range queryResults {
 		b.WriteString(",")
@@ -148,12 +151,10 @@ func exportMatrixCSV(path string, queryResults []queryResult, entries []index.En
 	}
 	b.WriteString(",||,Filename,Description\n")
 
-	// Data rows - one per rank position
 	numRanks := len(entries)
 	for rank := 0; rank < numRanks; rank++ {
 		b.WriteString(fmt.Sprintf("%d", rank+1))
 
-		// Query columns: show image at this rank with score
 		for _, qr := range queryResults {
 			if rank < len(qr.results) {
 				r := qr.results[rank]
@@ -164,7 +165,6 @@ func exportMatrixCSV(path string, queryResults []queryResult, entries []index.En
 			}
 		}
 
-		// Separator and description column
 		if rank < len(entries) {
 			entry := entries[rank]
 			filename := filepath.Base(entry.Path)
@@ -186,4 +186,28 @@ func escapeCSV(s string) string {
 		return "\"" + s + "\""
 	}
 	return s
+}
+
+func copyDir(src, dst string) error {
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		data, err := os.ReadFile(filepath.Join(src, entry.Name()))
+		if err != nil {
+			return err
+		}
+
+		if err := os.WriteFile(filepath.Join(dst, entry.Name()), data, 0644); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

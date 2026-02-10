@@ -1,4 +1,4 @@
-// Package internal provides the service orchestrator for LocalLens.
+// Package service provides the service orchestrator for LocalLens.
 package service
 
 import (
@@ -18,12 +18,13 @@ import (
 	"github.com/ramon-reichert/locallens/internal/service/search"
 )
 
+const indexFileName = ".locallens.index"
+
 // Service orchestrates indexing and search operations.
 type Service struct {
 	log       logger.Logger
 	describer *description.Describer
 	embedder  *embedding.Embedder
-	Index     *index.Index
 }
 
 // Config holds configuration for creating a Service.
@@ -31,7 +32,6 @@ type Config struct {
 	Log         logger.Logger
 	VisionPaths models.Path
 	EmbedPaths  models.Path
-	IndexPath   string
 }
 
 // New creates a Service with the given configuration.
@@ -46,33 +46,41 @@ func New(cfg Config) *Service {
 			Log:   cfg.Log,
 			Paths: cfg.EmbedPaths,
 		}),
-		Index: index.New(cfg.IndexPath),
 	}
 }
 
 // IndexFolder indexes all images in a folder.
-func (s *Service) IndexFolder(ctx context.Context, folderPath string) error {
+// Creates or updates a .locallens.index file inside the folder.
+func (s *Service) IndexFolder(ctx context.Context, folderPath string) (int, error) {
 	images, err := findImages(folderPath)
 	if err != nil {
-		return fmt.Errorf("find images: %w", err)
+		return 0, fmt.Errorf("find images: %w", err)
 	}
 
 	if len(images) == 0 {
 		s.log(ctx, "no images found", "folder", folderPath)
-		return nil
+		return 0, nil
 	}
 
 	start := time.Now()
 	s.log(ctx, "index folder", "found images", len(images))
 
-	// Phase 1: Describe all images
-	descriptions := make(map[string]string) // key: image path
+	idx := index.New(indexPathFor(folderPath))
+	idx.Load()
+
+	// Phase 1: Describe new images
+	descriptions := make(map[string]string)
 
 	if err := s.describer.Load(ctx); err != nil {
-		return fmt.Errorf("load describer: %w", err)
+		return 0, fmt.Errorf("load describer: %w", err)
 	}
 
 	for _, imgPath := range images {
+		if _, exists := idx.Get(imgPath); exists {
+			s.log(ctx, "already indexed, skipping", "path", imgPath)
+			continue
+		}
+
 		desc, err := s.describer.Describe(ctx, imgPath)
 		if err != nil {
 			s.log(ctx, "describe error", "path", imgPath, "error", err)
@@ -83,48 +91,58 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string) error {
 	}
 
 	if err := s.describer.Unload(ctx); err != nil {
-		return fmt.Errorf("unload describer: %w", err)
+		return 0, fmt.Errorf("unload describer: %w", err)
 	}
 
-	// Phase 2: Embed all descriptions
-	if err := s.embedder.Load(ctx); err != nil {
-		return fmt.Errorf("load embedder: %w", err)
-	}
-
-	for imgPath, desc := range descriptions {
-		s.log(ctx, "embed image", "path", imgPath)
-
-		vec, err := s.embedder.Embed(ctx, desc)
-		if err != nil {
-			s.log(ctx, "embed error", "path", imgPath, "error", err)
-			continue
+	// Phase 2: Embed new descriptions
+	if len(descriptions) > 0 {
+		if err := s.embedder.Load(ctx); err != nil {
+			return 0, fmt.Errorf("load embedder: %w", err)
 		}
 
-		s.Index.Add(index.Entry{
-			Path:        imgPath,
-			Description: desc,
-			Embedding:   vec,
-		})
+		for imgPath, desc := range descriptions {
+			s.log(ctx, "embed image", "path", imgPath)
+
+			vec, err := s.embedder.Embed(ctx, desc)
+			if err != nil {
+				s.log(ctx, "embed error", "path", imgPath, "error", err)
+				continue
+			}
+
+			idx.Add(index.Entry{
+				Path:        imgPath,
+				Description: desc,
+				Embedding:   vec,
+			})
+		}
+
+		if err := s.embedder.Unload(ctx); err != nil {
+			return 0, fmt.Errorf("unload embedder: %w", err)
+		}
 	}
 
-	if err := s.embedder.Unload(ctx); err != nil {
-		return fmt.Errorf("unload embedder: %w", err)
+	if err := idx.Save(); err != nil {
+		return 0, fmt.Errorf("save index: %w", err)
 	}
 
-	// Save index
-	if err := s.Index.Save(); err != nil {
-		return fmt.Errorf("save index: %w", err)
-	}
+	s.log(ctx, "index folder", "indexed images", idx.Len(), "elapsed time", time.Since(start))
 
-	s.log(ctx, "index folder", "indexed images", s.Index.Len(), "elapsed time", time.Since(start))
-
-	return nil
+	return idx.Len(), nil
 }
 
-// Search finds images similar to the query text.
-func (s *Service) Search(ctx context.Context, query string, k int) ([]search.Result, error) {
+// Search finds images similar to the query text in the given folder.
+// The folder must have been indexed first.
+func (s *Service) Search(ctx context.Context, folderPath string, query string, k int) ([]search.Result, error) {
+	s.log(ctx, "search images", "folder", folderPath, "top k", k, "query", query)
 
-	s.log(ctx, "search images", "top k", k, "query", query)
+	idx := index.New(indexPathFor(folderPath))
+	if err := idx.Load(); err != nil {
+		return nil, fmt.Errorf("load index: %w", err)
+	}
+
+	if idx.Len() == 0 {
+		return nil, nil
+	}
 
 	if !s.embedder.IsLoaded() {
 		if err := s.embedder.Load(ctx); err != nil {
@@ -137,7 +155,7 @@ func (s *Service) Search(ctx context.Context, query string, k int) ([]search.Res
 		return nil, fmt.Errorf("embed query: %w", err)
 	}
 
-	entries := s.Index.All()
+	entries := idx.All()
 	searchEntries := make([]search.Entry, len(entries))
 	for i, e := range entries {
 		searchEntries[i] = search.Entry{
@@ -150,12 +168,23 @@ func (s *Service) Search(ctx context.Context, query string, k int) ([]search.Res
 	return search.FindTopK(queryVec, searchEntries, k), nil
 }
 
+// IndexInfo returns the number of indexed images in a folder.
+func (s *Service) IndexInfo(folderPath string) int {
+	idx := index.New(indexPathFor(folderPath))
+	idx.Load()
+	return idx.Len()
+}
+
 // Close releases all resources.
 func (s *Service) Close(ctx context.Context) error {
 	if err := s.describer.Unload(ctx); err != nil {
 		return err
 	}
 	return s.embedder.Unload(ctx)
+}
+
+func indexPathFor(folderPath string) string {
+	return filepath.Join(folderPath, indexFileName)
 }
 
 func findImages(folderPath string) ([]string, error) {
