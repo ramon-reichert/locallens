@@ -49,9 +49,7 @@ func InstallDependencies(ctx context.Context, log logger.Logger) error {
 
 // ResolvePaths resolves the file paths for already-downloaded models.
 // Models must be downloaded first via `make setup`.
-func ResolvePaths() (ModelPaths, error) {
-	basePath := os.Getenv("KRONK_BASE_PATH")
-
+func ResolvePaths(basePath string) (ModelPaths, error) {
 	mdls, err := models.NewWithPaths(basePath)
 	if err != nil {
 		return ModelPaths{}, fmt.Errorf("models new: %w", err)

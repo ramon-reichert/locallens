@@ -18,7 +18,11 @@ import (
 	"github.com/ramon-reichert/locallens/internal/service/search"
 )
 
-const indexFileName = ".locallens.index"
+const (
+	indexFileName       = ".locallens.index"
+	describeImageTimeout = 2 * time.Minute
+	embedTimeout         = 1 * time.Minute
+)
 
 // Service orchestrates indexing and search operations.
 type Service struct {
@@ -81,7 +85,10 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string) (int, erro
 			continue
 		}
 
-		desc, err := s.describer.Describe(ctx, imgPath)
+		imgCtx, imgCancel := context.WithTimeout(ctx, describeImageTimeout)
+		desc, err := s.describer.Describe(imgCtx, imgPath)
+		imgCancel()
+
 		if err != nil {
 			s.log(ctx, "describe error", "path", imgPath, "error", err)
 			continue
@@ -103,7 +110,9 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string) (int, erro
 		for imgPath, desc := range descriptions {
 			s.log(ctx, "embed image", "path", imgPath)
 
-			vec, err := s.embedder.Embed(ctx, desc)
+			embedCtx, embedCancel := context.WithTimeout(ctx, embedTimeout)
+			vec, err := s.embedder.Embed(embedCtx, desc)
+			embedCancel()
 			if err != nil {
 				s.log(ctx, "embed error", "path", imgPath, "error", err)
 				continue
@@ -150,7 +159,9 @@ func (s *Service) Search(ctx context.Context, folderPath string, query string, k
 		}
 	}
 
-	queryVec, err := s.embedder.Embed(ctx, query)
+	embedCtx, embedCancel := context.WithTimeout(ctx, embedTimeout)
+	queryVec, err := s.embedder.Embed(embedCtx, query)
+	embedCancel()
 	if err != nil {
 		return nil, fmt.Errorf("embed query: %w", err)
 	}

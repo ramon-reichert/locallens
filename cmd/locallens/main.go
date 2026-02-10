@@ -34,7 +34,7 @@ func run() error {
 	log := logger.New()
 
 	// Resolve model paths (models must be downloaded via 'make setup').
-	paths, err := kronk.ResolvePaths()
+	paths, err := kronk.ResolvePaths(`B:/dev/kronkdata`)
 	if err != nil {
 		return fmt.Errorf("resolve paths: %w", err)
 	}

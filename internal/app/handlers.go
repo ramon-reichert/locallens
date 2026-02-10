@@ -2,9 +2,11 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"io/fs"
 	"net/http"
+	"time"
 
 	"github.com/ramon-reichert/locallens/internal/platform/logger"
 	"github.com/ramon-reichert/locallens/internal/service"
@@ -68,7 +70,10 @@ func (h *Handlers) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := h.svc.Search(r.Context(), folder, query, 20)
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+	defer cancel()
+
+	results, err := h.svc.Search(ctx, folder, query, 20)
 	if err != nil {
 		h.log(r.Context(), "search error", "query", query, "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)

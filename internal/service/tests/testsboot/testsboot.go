@@ -30,7 +30,7 @@ func Boot() {
 			os.Exit(1)
 		}
 
-		paths, err := kronk.ResolvePaths()
+		paths, err := kronk.ResolvePaths(os.Getenv("KRONK_BASE_PATH"))
 		if err != nil {
 			fmt.Printf("resolve model paths: %v\n", err)
 			os.Exit(1)
