@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocalLens</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div id="app">
+        <header id="search-bar">
+            <h1>LocalLens</h1>
+            <div id="search-controls">
+                <input type="text" id="search-input" placeholder="Search images..." disabled>
+                <button id="search-btn" disabled>Search</button>
+            </div>
+        </header>
+        <div id="main">
+            <aside id="folder-panel">
+                <div id="folder-header">
+                    <h2>Folders</h2>
+                </div>
+                <div id="folder-tree"></div>
+                <button id="index-btn" disabled>Index Folder</button>
+                <div id="folder-status"></div>
+            </aside>
+            <section id="results-panel">
+                <div id="results-status"></div>
+                <div id="results-grid"></div>
+            </section>
+        </div>
+    </div>
+    <script src="/app.js"></script>
+</body>
+</html>
