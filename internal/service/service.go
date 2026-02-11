@@ -186,6 +186,18 @@ func (s *Service) IndexInfo(folderPath string) int {
 	return idx.Len()
 }
 
+// IndexedPaths returns the set of image paths that have been indexed in a folder.
+func (s *Service) IndexedPaths(folderPath string) map[string]bool {
+	idx := index.New(indexPathFor(folderPath))
+	idx.Load()
+
+	paths := make(map[string]bool, idx.Len())
+	for _, e := range idx.All() {
+		paths[e.Path] = true
+	}
+	return paths
+}
+
 // Close releases all resources.
 func (s *Service) Close(ctx context.Context) error {
 	if err := s.describer.Unload(ctx); err != nil {

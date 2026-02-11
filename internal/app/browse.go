@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 )
 
@@ -12,7 +13,7 @@ type BrowseResponse struct {
 	Parent  string        `json:"parent"`
 	Current string        `json:"current"`
 	Folders []FolderEntry `json:"folders"`
-	Images  []string      `json:"images"`
+	Images  []ImageEntry  `json:"images"`
 }
 
 // FolderEntry represents a folder in the browse response.
@@ -21,12 +22,19 @@ type FolderEntry struct {
 	Path string `json:"path"`
 }
 
+// ImageEntry represents an image file with its indexed status.
+type ImageEntry struct {
+	Name    string `json:"name"`
+	Path    string `json:"path"`
+	Indexed bool   `json:"indexed"`
+}
+
 var imageExts = map[string]bool{
 	".jpg": true, ".jpeg": true, ".png": true,
 	".gif": true, ".webp": true, ".bmp": true,
 }
 
-func browse(path string) (*BrowseResponse, error) {
+func browse(path string, indexedPaths map[string]bool) (*BrowseResponse, error) {
 	if path == "" {
 		return listDrives()
 	}
@@ -62,9 +70,21 @@ func browse(path string) (*BrowseResponse, error) {
 
 		ext := strings.ToLower(filepath.Ext(e.Name()))
 		if imageExts[ext] {
-			resp.Images = append(resp.Images, filepath.Join(path, e.Name()))
+			imgPath := filepath.Join(path, e.Name())
+			resp.Images = append(resp.Images, ImageEntry{
+				Name:    e.Name(),
+				Path:    imgPath,
+				Indexed: indexedPaths[imgPath],
+			})
 		}
 	}
+
+	sort.Slice(resp.Folders, func(i, j int) bool {
+		return strings.ToLower(resp.Folders[i].Name) < strings.ToLower(resp.Folders[j].Name)
+	})
+	sort.Slice(resp.Images, func(i, j int) bool {
+		return strings.ToLower(resp.Images[i].Name) < strings.ToLower(resp.Images[j].Name)
+	})
 
 	return &resp, nil
 }

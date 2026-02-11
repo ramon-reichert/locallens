@@ -5,7 +5,8 @@
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    font-size: 13px;
     background: #1a1a2e;
     color: #e0e0e0;
     height: 100vh;
@@ -18,17 +19,19 @@ body {
     height: 100vh;
 }
 
+/* Search Bar */
+
 #search-bar {
     display: flex;
     align-items: center;
     gap: 16px;
-    padding: 12px 20px;
+    padding: 8px 16px;
     background: #16213e;
     border-bottom: 1px solid #0f3460;
 }
 
 #search-bar h1 {
-    font-size: 18px;
+    font-size: 16px;
     color: #00d9ff;
     white-space: nowrap;
 }
@@ -36,17 +39,18 @@ body {
 #search-controls {
     display: flex;
     flex: 1;
+    align-items: center;
     gap: 8px;
 }
 
 #search-input {
     flex: 1;
-    padding: 8px 12px;
+    padding: 6px 10px;
     border: 1px solid #0f3460;
-    border-radius: 6px;
+    border-radius: 4px;
     background: #1a1a2e;
     color: #e0e0e0;
-    font-size: 14px;
+    font-size: 13px;
 }
 
 #search-input:focus {
@@ -58,14 +62,40 @@ body {
     opacity: 0.5;
 }
 
+#topk-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: #8888aa;
+    white-space: nowrap;
+}
+
+#topk-input {
+    width: 50px;
+    padding: 5px 6px;
+    border: 1px solid #0f3460;
+    border-radius: 4px;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    font-size: 12px;
+    text-align: center;
+}
+
+#topk-input:focus {
+    outline: none;
+    border-color: #00d9ff;
+}
+
 button {
-    padding: 8px 16px;
+    padding: 6px 14px;
     border: none;
-    border-radius: 6px;
+    border-radius: 4px;
     background: #0f3460;
     color: #e0e0e0;
-    font-size: 14px;
+    font-size: 13px;
     cursor: pointer;
+    white-space: nowrap;
 }
 
 button:hover:not(:disabled) {
@@ -78,136 +108,181 @@ button:disabled {
     cursor: not-allowed;
 }
 
+/* Main Layout */
+
 #main {
     display: flex;
     flex: 1;
     overflow: hidden;
 }
 
+/* Folder Panel */
+
 #folder-panel {
     width: 260px;
     min-width: 260px;
-    padding: 16px;
     background: #16213e;
     border-right: 1px solid #0f3460;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    overflow-y: auto;
+    overflow: hidden;
 }
 
 #folder-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    padding: 10px 12px 6px;
 }
 
 #folder-header h2 {
-    font-size: 14px;
+    font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 1px;
     color: #8888aa;
 }
 
-#open-folder-btn {
-    font-size: 12px;
-    padding: 4px 10px;
-}
-
 #folder-tree {
     flex: 1;
     overflow-y: auto;
+    padding: 2px 0;
 }
 
-.folder-item {
-    padding: 8px 12px;
-    border-radius: 4px;
+.tree-node {
+    user-select: none;
+}
+
+.tree-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 8px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 13px;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    line-height: 22px;
 }
 
-.folder-item:hover {
-    background: #1a1a2e;
+.tree-row:hover {
+    background: rgba(255, 255, 255, 0.05);
 }
 
-.folder-item.selected {
+.tree-row.selected {
     background: #0f3460;
     color: #00d9ff;
 }
 
-.folder-up {
-    color: #00d9ff;
-    font-weight: bold;
+.tree-arrow {
+    flex-shrink: 0;
+    width: 14px;
+    font-size: 8px;
+    text-align: center;
+    color: #8888aa;
+    transition: transform 0.15s;
+    cursor: pointer;
 }
 
-.folder-current {
-    padding: 6px 12px;
+.tree-arrow.expanded {
+    transform: rotate(90deg);
+}
+
+.tree-arrow:hover {
+    color: #e0e0e0;
+}
+
+.tree-icon {
+    flex-shrink: 0;
+    width: 16px;
+    text-align: center;
     font-size: 12px;
-    color: #8888aa;
-    word-break: break-all;
-    border-bottom: 1px solid #0f3460;
-    margin-bottom: 4px;
+}
+
+.tree-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tree-children {
+    /* children are indented via paddingLeft on .tree-row */
+}
+
+#folder-actions {
+    padding: 8px 12px;
+    border-top: 1px solid #0f3460;
 }
 
 #folder-status {
-    font-size: 12px;
+    font-size: 11px;
     color: #8888aa;
-    min-height: 20px;
+    margin-top: 6px;
+    min-height: 16px;
 }
+
+/* Results Panel */
 
 #results-panel {
     flex: 1;
-    padding: 16px;
+    padding: 12px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
 }
 
 #results-status {
-    font-size: 14px;
+    font-size: 12px;
     color: #8888aa;
-    min-height: 20px;
+    min-height: 16px;
 }
 
 #results-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
 }
 
 .result-card {
     background: #16213e;
-    border-radius: 8px;
+    border-radius: 6px;
     overflow: hidden;
     border: 1px solid #0f3460;
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+
+.result-card:hover {
+    border-color: #00d9ff;
 }
 
 .result-card img {
     width: 100%;
-    height: 160px;
+    height: 110px;
     object-fit: cover;
     display: block;
 }
 
 .result-card .info {
-    padding: 10px;
+    padding: 6px 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 
-.result-card .description {
-    font-size: 12px;
-    color: #ccccdd;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+.result-card .info .status-icon {
+    flex-shrink: 0;
+    font-size: 10px;
 }
 
-.result-card .score {
+.result-card .info .name {
     font-size: 11px;
-    color: #00d9ff;
-    margin-top: 6px;
+    color: #ccccdd;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
 }
+
+.result-card .info .score {
+    font-size: 10px;
+    color: #00d9ff;
+    flex-shrink: 0;
+    font-weight: bold;
+}
+

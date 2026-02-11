@@ -12,6 +12,9 @@
             <h1>LocalLens</h1>
             <div id="search-controls">
                 <input type="text" id="search-input" placeholder="Search images..." disabled>
+                <label id="topk-label">Top K
+                    <input type="number" id="topk-input" value="10" min="1" max="100">
+                </label>
                 <button id="search-btn" disabled>Search</button>
             </div>
         </header>
@@ -21,8 +24,10 @@
                     <h2>Folders</h2>
                 </div>
                 <div id="folder-tree"></div>
-                <button id="index-btn" disabled>Index Folder</button>
-                <div id="folder-status"></div>
+                <div id="folder-actions">
+                    <button id="index-btn" disabled>Index Folder</button>
+                    <div id="folder-status"></div>
+                </div>
             </aside>
             <section id="results-panel">
                 <div id="results-status"></div>

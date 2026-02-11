@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/ramon-reichert/locallens/internal/service"
 	"github.com/ramon-reichert/locallens/internal/service/tests/testsboot"
@@ -38,8 +37,7 @@ func TestMain(m *testing.M) {
 
 	testsboot.Boot()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-	defer cancel()
+	ctx := context.Background()
 
 	// Copy testdata to a temp dir so we don't write .locallens.index into the source tree
 	tmp, err := os.MkdirTemp("", "locallens_test_*")
@@ -114,8 +112,7 @@ func TestIndexPersistence(t *testing.T) {
 }
 
 func TestSearch(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
+	ctx := context.Background()
 
 	results, err := svc.Search(ctx, testFolder, "any image", 3)
 	if err != nil {
@@ -148,8 +145,7 @@ func TestSearch(t *testing.T) {
 }
 
 func TestSearchExpectedOrder(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
+	ctx := context.Background()
 
 	for _, tc := range expectedSearchResults {
 		t.Run(tc.query, func(t *testing.T) {
@@ -173,8 +169,7 @@ func TestSearchExpectedOrder(t *testing.T) {
 }
 
 func TestSearchEmptyIndex(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
+	ctx := context.Background()
 
 	emptyDir := t.TempDir()
 

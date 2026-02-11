@@ -6,6 +6,10 @@ import (
 	"encoding/json"
 	"io/fs"
 	"net/http"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/ramon-reichert/locallens/internal/platform/logger"
@@ -33,6 +37,7 @@ func (h *Handlers) Register(mux *http.ServeMux, staticFS fs.FS) {
 	mux.HandleFunc("GET /api/browse", h.handleBrowse)
 	mux.HandleFunc("GET /api/images", h.handleImage)
 	mux.HandleFunc("GET /api/index-info", h.handleIndexInfo)
+	mux.HandleFunc("POST /api/open", h.handleOpen)
 
 	mux.Handle("GET /", http.FileServerFS(staticFS))
 }
@@ -70,10 +75,17 @@ func (h *Handlers) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	k := 20
+	if ks := r.URL.Query().Get("k"); ks != "" {
+		if v, err := strconv.Atoi(ks); err == nil && v > 0 {
+			k = v
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
 
-	results, err := h.svc.Search(ctx, folder, query, 20)
+	results, err := h.svc.Search(ctx, folder, query, k)
 	if err != nil {
 		h.log(r.Context(), "search error", "query", query, "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -86,7 +98,12 @@ func (h *Handlers) handleSearch(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) handleBrowse(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 
-	resp, err := browse(path)
+	var indexedPaths map[string]bool
+	if path != "" {
+		indexedPaths = h.svc.IndexedPaths(path)
+	}
+
+	resp, err := browse(path, indexedPaths)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -114,6 +131,38 @@ func (h *Handlers) handleIndexInfo(w http.ResponseWriter, r *http.Request) {
 
 	count := h.svc.IndexInfo(folder)
 	writeJSON(w, http.StatusOK, map[string]int{"count": count})
+}
+
+func (h *Handlers) handleOpen(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Path == "" {
+		http.Error(w, "path is required", http.StatusBadRequest)
+		return
+	}
+
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("explorer.exe", "/select,", req.Path)
+	case "darwin":
+		cmd = exec.Command("open", "-R", req.Path)
+	default:
+		cmd = exec.Command("xdg-open", filepath.Dir(req.Path))
+	}
+
+	if err := cmd.Start(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

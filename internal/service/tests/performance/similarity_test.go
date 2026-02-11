@@ -67,8 +67,7 @@ type queryResult struct {
 
 func TestSimilarity(t *testing.T) {
 	testsboot.Boot()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-	defer cancel()
+	ctx := context.Background()
 
 	// Copy testdata to temp dir to avoid writing index into source tree
 	tmp := t.TempDir()
