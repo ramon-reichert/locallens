@@ -150,7 +150,7 @@ func (h *Handlers) handleOpen(w http.ResponseWriter, r *http.Request) {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
-		cmd = exec.Command("explorer.exe", "/select,", req.Path)
+		cmd = exec.Command("cmd", "/C", "start", "", "explorer.exe", "/select,"+req.Path)
 	case "darwin":
 		cmd = exec.Command("open", "-R", req.Path)
 	default:
