@@ -4,14 +4,20 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"net/http"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"sync"
 	"time"
 
+	kronksdk "github.com/ardanlabs/kronk/sdk/kronk"
+
+	"github.com/ramon-reichert/locallens/internal/platform/config"
+	"github.com/ramon-reichert/locallens/internal/platform/kronk"
 	"github.com/ramon-reichert/locallens/internal/platform/logger"
 	"github.com/ramon-reichert/locallens/internal/service"
 )
@@ -19,15 +25,24 @@ import (
 // Handlers holds dependencies for all HTTP handlers.
 type Handlers struct {
 	log logger.Logger
+
+	mu  sync.RWMutex
 	svc *service.Service
 }
 
-// New creates a Handlers with the given dependencies.
-func New(log logger.Logger, svc *service.Service) *Handlers {
-	return &Handlers{
-		log: log,
-		svc: svc,
+// New creates a Handlers. If config indicates setup is complete, it initializes
+// the service immediately.
+func New(log logger.Logger) *Handlers {
+	h := &Handlers{log: log}
+
+	cfg := config.Load()
+	if cfg.SetupComplete {
+		if err := h.initService(cfg.BasePath); err != nil {
+			log(context.Background(), "service init failed, setup may be needed", "error", err)
+		}
 	}
+
+	return h
 }
 
 // Register registers all API routes and static file serving on the given mux.
@@ -38,11 +53,67 @@ func (h *Handlers) Register(mux *http.ServeMux, staticFS fs.FS) {
 	mux.HandleFunc("GET /api/images", h.handleImage)
 	mux.HandleFunc("GET /api/index-info", h.handleIndexInfo)
 	mux.HandleFunc("POST /api/open", h.handleOpen)
+	mux.HandleFunc("GET /api/setup/status", h.handleSetupStatus)
+	mux.HandleFunc("POST /api/setup/run", h.handleSetupRun)
 
 	mux.Handle("GET /", http.FileServerFS(staticFS))
 }
 
+// Close releases service resources if initialized.
+func (h *Handlers) Close(ctx context.Context) {
+	h.mu.RLock()
+	svc := h.svc
+	h.mu.RUnlock()
+
+	if svc != nil {
+		svc.Close(ctx)
+	}
+}
+
+func (h *Handlers) initService(basePath string) error {
+	paths, err := kronk.ResolvePaths(basePath)
+	if err != nil {
+		return err
+	}
+
+	svc := service.New(service.Config{
+		Log:         h.log,
+		VisionPaths: paths.Vision,
+		EmbedPaths:  paths.Embed,
+	})
+
+	h.mu.Lock()
+	h.svc = svc
+	h.mu.Unlock()
+
+	return nil
+}
+
+func (h *Handlers) requireService(w http.ResponseWriter) *service.Service {
+	h.mu.RLock()
+	svc := h.svc
+	h.mu.RUnlock()
+
+	if svc == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "setup_required",
+		})
+		return nil
+	}
+
+	return svc
+}
+
+// ---- API Handlers ----
+
 func (h *Handlers) handleIndex(w http.ResponseWriter, r *http.Request) {
+	svc := h.requireService(w)
+	if svc == nil {
+		return
+	}
+
 	var req struct {
 		Folder string `json:"folder"`
 	}
@@ -56,7 +127,7 @@ func (h *Handlers) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	count, err := h.svc.IndexFolder(r.Context(), req.Folder)
+	count, err := svc.IndexFolder(r.Context(), req.Folder)
 	if err != nil {
 		h.log(r.Context(), "index error", "folder", req.Folder, "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -67,6 +138,11 @@ func (h *Handlers) handleIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) handleSearch(w http.ResponseWriter, r *http.Request) {
+	svc := h.requireService(w)
+	if svc == nil {
+		return
+	}
+
 	query := r.URL.Query().Get("q")
 	folder := r.URL.Query().Get("folder")
 
@@ -85,7 +161,7 @@ func (h *Handlers) handleSearch(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
 
-	results, err := h.svc.Search(ctx, folder, query, k)
+	results, err := svc.Search(ctx, folder, query, k)
 	if err != nil {
 		h.log(r.Context(), "search error", "query", query, "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -99,8 +175,13 @@ func (h *Handlers) handleBrowse(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 
 	var indexedPaths map[string]bool
-	if path != "" {
-		indexedPaths = h.svc.IndexedPaths(path)
+
+	h.mu.RLock()
+	svc := h.svc
+	h.mu.RUnlock()
+
+	if path != "" && svc != nil {
+		indexedPaths = svc.IndexedPaths(path)
 	}
 
 	resp, err := browse(path, indexedPaths)
@@ -123,13 +204,18 @@ func (h *Handlers) handleImage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) handleIndexInfo(w http.ResponseWriter, r *http.Request) {
+	svc := h.requireService(w)
+	if svc == nil {
+		return
+	}
+
 	folder := r.URL.Query().Get("folder")
 	if folder == "" {
 		http.Error(w, "folder is required", http.StatusBadRequest)
 		return
 	}
 
-	count := h.svc.IndexInfo(folder)
+	count := svc.IndexInfo(folder)
 	writeJSON(w, http.StatusOK, map[string]int{"count": count})
 }
 
@@ -163,6 +249,89 @@ func (h *Handlers) handleOpen(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ---- Setup Handlers ----
+
+func (h *Handlers) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
+	cfg := config.Load()
+
+	h.mu.RLock()
+	ready := h.svc != nil
+	h.mu.RUnlock()
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"complete":    cfg.SetupComplete && ready,
+		"basePath":    cfg.BasePath,
+		"defaultPath": config.DefaultBasePath(),
+	})
+}
+
+func (h *Handlers) handleSetupRun(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		BasePath string `json:"basePath"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.BasePath == "" {
+		http.Error(w, "basePath is required", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	send := func(step, status string) {
+		fmt.Fprintf(w, "data: {\"step\":%q,\"status\":%q}\n\n", step, status)
+		flusher.Flush()
+	}
+
+	ctx := r.Context()
+	log := h.log
+
+	send("libs", "downloading")
+	if err := kronk.InstallDependencies(ctx, log); err != nil {
+		send("libs", "error: "+err.Error())
+		return
+	}
+	send("libs", "complete")
+
+	send("models", "downloading")
+
+	if err := kronksdk.Init(); err != nil {
+		send("models", "error: "+err.Error())
+		return
+	}
+
+	_, err := kronk.DownloadModels(ctx, log, req.BasePath)
+	if err != nil {
+		send("models", "error: "+err.Error())
+		return
+	}
+	send("models", "complete")
+
+	send("init", "initializing")
+	if err := h.initService(req.BasePath); err != nil {
+		send("init", "error: "+err.Error())
+		return
+	}
+
+	cfg := config.Config{
+		BasePath:      req.BasePath,
+		SetupComplete: true,
+	}
+	config.Save(cfg)
+
+	send("done", "complete")
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

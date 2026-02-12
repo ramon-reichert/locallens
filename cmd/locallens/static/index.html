@@ -17,6 +17,7 @@
                 </label>
                 <button id="search-btn" disabled>Search</button>
             </div>
+            <button id="setup-btn" title="Setup">&#9881;</button>
         </header>
         <div id="main">
             <aside id="folder-panel">
@@ -35,6 +36,46 @@
             </section>
         </div>
     </div>
+
+    <div id="setup-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <h2>Setup</h2>
+            <div id="setup-warning" class="setup-warning hidden">
+                Setup is required before you can index or search images.
+            </div>
+            <p class="setup-text">
+                LocalLens needs to download AI models to analyze and search your images locally.
+                All processing happens on your machine — nothing is sent to the cloud.
+            </p>
+            <p class="setup-text warning-text">
+                &#9888; The download is approximately <strong>2 GB</strong>. Make sure you have
+                enough disk space at the chosen location.
+            </p>
+            <div class="setup-field">
+                <label for="setup-path">Download location</label>
+                <div class="setup-path-row">
+                    <input type="text" id="setup-path" placeholder="Path to store models...">
+                    <button id="setup-browse-btn" type="button">Browse</button>
+                </div>
+            </div>
+            <div id="folder-picker" class="folder-picker hidden">
+                <div id="folder-picker-tree"></div>
+                <div class="folder-picker-actions">
+                    <button id="folder-picker-select">Select</button>
+                    <button id="folder-picker-cancel">Cancel</button>
+                </div>
+            </div>
+            <div id="setup-progress" class="setup-progress hidden">
+                <div id="setup-progress-text"></div>
+            </div>
+            <div class="setup-actions">
+                <button id="setup-download-btn">Download &amp; Install</button>
+                <button id="setup-close-btn">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/app.js"></script>
 </body>
 </html>

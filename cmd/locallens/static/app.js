@@ -2,8 +2,9 @@
 
 const state = {
     selectedPath: "",
-    expanded: new Set(),
     childrenCache: {},
+    expanded: new Set(),
+    setupComplete: false,
 };
 
 const searchInput = document.getElementById("search-input");
@@ -15,13 +16,206 @@ const folderStatus = document.getElementById("folder-status");
 const resultsStatus = document.getElementById("results-status");
 const resultsGrid = document.getElementById("results-grid");
 
+const setupBtn = document.getElementById("setup-btn");
+const setupModal = document.getElementById("setup-modal");
+const setupWarning = document.getElementById("setup-warning");
+const setupPath = document.getElementById("setup-path");
+const setupDownloadBtn = document.getElementById("setup-download-btn");
+const setupCloseBtn = document.getElementById("setup-close-btn");
+const setupProgress = document.getElementById("setup-progress");
+const setupProgressText = document.getElementById("setup-progress-text");
+
 indexBtn.addEventListener("click", indexFolder);
 searchBtn.addEventListener("click", doSearch);
 searchInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") doSearch();
 });
 
-loadDrives();
+const setupBrowseBtn = document.getElementById("setup-browse-btn");
+const folderPicker = document.getElementById("folder-picker");
+const folderPickerTree = document.getElementById("folder-picker-tree");
+const folderPickerSelect = document.getElementById("folder-picker-select");
+const folderPickerCancel = document.getElementById("folder-picker-cancel");
+
+let pickerSelectedPath = "";
+
+setupBtn.addEventListener("click", () => openSetup(false));
+setupCloseBtn.addEventListener("click", closeSetup);
+setupModal.querySelector(".modal-backdrop").addEventListener("click", closeSetup);
+setupDownloadBtn.addEventListener("click", runSetup);
+setupBrowseBtn.addEventListener("click", openFolderPicker);
+folderPickerSelect.addEventListener("click", () => {
+    if (pickerSelectedPath) setupPath.value = pickerSelectedPath;
+    folderPicker.classList.add("hidden");
+});
+folderPickerCancel.addEventListener("click", () => folderPicker.classList.add("hidden"));
+
+init();
+
+async function init() {
+    await checkSetupStatus();
+    loadDrives();
+}
+
+// ---- Setup ----
+
+async function checkSetupStatus() {
+    try {
+        const res = await fetch("/api/setup/status");
+        const data = await res.json();
+        state.setupComplete = data.complete;
+        setupPath.value = data.basePath || data.defaultPath || "";
+
+        if (!data.complete) {
+            openSetup(false);
+        }
+    } catch {}
+}
+
+function openSetup(showWarning) {
+    setupWarning.classList.toggle("hidden", !showWarning);
+    setupProgress.classList.add("hidden");
+    setupDownloadBtn.disabled = false;
+    setupModal.classList.remove("hidden");
+}
+
+function closeSetup() {
+    setupModal.classList.add("hidden");
+}
+
+async function runSetup() {
+    const basePath = setupPath.value.trim();
+    if (!basePath) {
+        setupProgressText.textContent = "Please enter a download location.";
+        setupProgress.classList.remove("hidden");
+        return;
+    }
+
+    setupDownloadBtn.disabled = true;
+    setupCloseBtn.disabled = true;
+    setupProgress.classList.remove("hidden");
+    setupProgressText.textContent = "Starting download...";
+
+    try {
+        const res = await fetch("/api/setup/run", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ basePath }),
+        });
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop();
+
+            for (const line of lines) {
+                if (!line.startsWith("data: ")) continue;
+                try {
+                    const event = JSON.parse(line.slice(6));
+                    handleSetupEvent(event);
+                } catch {}
+            }
+        }
+    } catch {
+        setupProgressText.textContent = "Setup failed. Check your connection and try again.";
+    } finally {
+        setupDownloadBtn.disabled = false;
+        setupCloseBtn.disabled = false;
+    }
+}
+
+function handleSetupEvent(event) {
+    const labels = {
+        libs: "AI runtime libraries",
+        models: "AI models",
+        init: "Initializing service",
+        done: "Setup complete",
+    };
+
+    const label = labels[event.step] || event.step;
+
+    if (event.status === "complete" && event.step === "done") {
+        setupProgressText.textContent = "Setup complete. You can close this panel.";
+        state.setupComplete = true;
+        return;
+    }
+
+    if (event.status.startsWith("error:")) {
+        setupProgressText.textContent = `Error during ${label}: ${event.status.slice(7)}`;
+        return;
+    }
+
+    if (event.status === "downloading") {
+        setupProgressText.textContent = `Downloading ${label}...`;
+    } else if (event.status === "complete") {
+        setupProgressText.textContent = `${label} — done.`;
+    } else if (event.status === "initializing") {
+        setupProgressText.textContent = `${label}...`;
+    }
+}
+
+// ---- Folder Picker ----
+
+async function openFolderPicker() {
+    pickerSelectedPath = setupPath.value.trim();
+    folderPicker.classList.remove("hidden");
+    await renderPickerLevel("");
+}
+
+async function renderPickerLevel(path) {
+    const data = await fetchBrowse(path);
+    if (!data) return;
+
+    folderPickerTree.innerHTML = "";
+
+    if (data.parent !== undefined && data.parent !== "") {
+        addPickerRow("..", data.parent, true);
+    } else if (data.current) {
+        addPickerRow("Drives", "", true);
+    }
+
+    for (const folder of (data.folders || [])) {
+        addPickerRow(folder.name, folder.path, false);
+    }
+}
+
+function addPickerRow(name, path, isUp) {
+    const row = document.createElement("div");
+    row.className = "pick-row";
+    if (path === pickerSelectedPath) row.classList.add("selected");
+
+    const icon = isUp ? "\u2190 " : "\uD83D\uDCC1 ";
+    row.textContent = icon + name;
+    row.title = path || "Root";
+
+    row.addEventListener("click", () => {
+        pickerSelectedPath = path;
+        document.querySelectorAll(".pick-row.selected").forEach(el => el.classList.remove("selected"));
+        row.classList.add("selected");
+    });
+
+    row.addEventListener("dblclick", () => {
+        pickerSelectedPath = path;
+        renderPickerLevel(path);
+    });
+
+    folderPickerTree.appendChild(row);
+}
+
+function requireSetup() {
+    if (!state.setupComplete) {
+        openSetup(true);
+        return true;
+    }
+    return false;
+}
 
 // ---- Tree Navigation ----
 
@@ -190,6 +384,10 @@ async function loadFolderImages(path) {
 async function loadIndexInfo(folder) {
     try {
         const res = await fetch(`/api/index-info?folder=${encodeURIComponent(folder)}`);
+        if (res.status === 503) {
+            folderStatus.textContent = "Setup required";
+            return;
+        }
         const data = await res.json();
         folderStatus.textContent = data.count > 0
             ? `${data.count} images indexed`
@@ -277,6 +475,7 @@ async function openInExplorer(path) {
 // ---- Index ----
 
 async function indexFolder() {
+    if (requireSetup()) return;
     if (!state.selectedPath) return;
 
     indexBtn.disabled = true;
@@ -288,6 +487,12 @@ async function indexFolder() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ folder: state.selectedPath }),
         });
+
+        if (res.status === 503) {
+            openSetup(true);
+            return;
+        }
+
         const data = await res.json();
 
         if (res.ok) {
@@ -307,6 +512,8 @@ async function indexFolder() {
 // ---- Search ----
 
 async function doSearch() {
+    if (requireSetup()) return;
+
     const query = searchInput.value.trim();
     if (!query || !state.selectedPath) return;
 
@@ -320,6 +527,12 @@ async function doSearch() {
         const res = await fetch(
             `/api/search?q=${encodeURIComponent(query)}&folder=${encodeURIComponent(state.selectedPath)}&k=${k}`
         );
+
+        if (res.status === 503) {
+            openSetup(true);
+            return;
+        }
+
         const results = await res.json();
 
         if (!results || results.length === 0) {

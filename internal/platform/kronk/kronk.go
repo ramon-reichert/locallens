@@ -4,7 +4,6 @@ package kronk
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/ardanlabs/kronk/sdk/kronk"
@@ -69,13 +68,11 @@ func ResolvePaths(basePath string) (ModelPaths, error) {
 }
 
 // DownloadModels downloads vision and embedding models.
-func DownloadModels(ctx context.Context, log logger.Logger) (ModelPaths, error) {
+func DownloadModels(ctx context.Context, log logger.Logger, basePath string) (ModelPaths, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 	defer cancel()
 
 	log(ctx, "downloading models")
-
-	basePath := os.Getenv("KRONK_BASE_PATH")
 
 	mdls, err := models.NewWithPaths(basePath)
 	if err != nil {
