@@ -55,8 +55,9 @@ func New(cfg Config) *Service {
 
 // IndexFolder indexes all images in a folder.
 // Creates or updates a .locallens.index file inside the folder.
-func (s *Service) IndexFolder(ctx context.Context, folderPath string) (int, error) {
-	images, err := findImages(folderPath)
+// If recursive is true, it walks subdirectories.
+func (s *Service) IndexFolder(ctx context.Context, folderPath string, recursive bool) (int, error) {
+	images, err := findImages(folderPath, recursive)
 	if err != nil {
 		return 0, fmt.Errorf("find images: %w", err)
 	}
@@ -141,17 +142,9 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string) (int, erro
 
 // Search finds images similar to the query text in the given folder.
 // The folder must have been indexed first.
-func (s *Service) Search(ctx context.Context, folderPath string, query string, k int) ([]search.Result, error) {
-	s.log(ctx, "search images", "folder", folderPath, "top k", k, "query", query)
-
-	idx := index.New(indexPathFor(folderPath))
-	if err := idx.Load(); err != nil {
-		return nil, fmt.Errorf("load index: %w", err)
-	}
-
-	if idx.Len() == 0 {
-		return nil, nil
-	}
+// If recursive is true, it searches across all indexed subfolders.
+func (s *Service) Search(ctx context.Context, folderPath string, query string, k int, recursive bool) ([]search.Result, error) {
+	s.log(ctx, "search images", "folder", folderPath, "top k", k, "recursive", recursive, "query", query)
 
 	if !s.embedder.IsLoaded() {
 		if err := s.embedder.Load(ctx); err != nil {
@@ -166,17 +159,53 @@ func (s *Service) Search(ctx context.Context, folderPath string, query string, k
 		return nil, fmt.Errorf("embed query: %w", err)
 	}
 
-	entries := idx.All()
-	searchEntries := make([]search.Entry, len(entries))
-	for i, e := range entries {
-		searchEntries[i] = search.Entry{
-			Path:        e.Path,
-			Description: e.Description,
-			Embedding:   e.Embedding,
+	var allEntries []search.Entry
+
+	if recursive {
+		// Walk all subdirectories and collect entries from each index.
+		filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
+			if err != nil || !info.IsDir() {
+				return nil
+			}
+			idxPath := indexPathFor(path)
+			if _, statErr := os.Stat(idxPath); os.IsNotExist(statErr) {
+				return nil
+			}
+
+			idx := index.New(idxPath)
+			if loadErr := idx.Load(); loadErr != nil {
+				return nil
+			}
+
+			for _, e := range idx.All() {
+				allEntries = append(allEntries, search.Entry{
+					Path:        e.Path,
+					Description: e.Description,
+					Embedding:   e.Embedding,
+				})
+			}
+			return nil
+		})
+	} else {
+		idx := index.New(indexPathFor(folderPath))
+		if err := idx.Load(); err != nil {
+			return nil, fmt.Errorf("load index: %w", err)
+		}
+
+		for _, e := range idx.All() {
+			allEntries = append(allEntries, search.Entry{
+				Path:        e.Path,
+				Description: e.Description,
+				Embedding:   e.Embedding,
+			})
 		}
 	}
 
-	return search.FindTopK(queryVec, searchEntries, k), nil
+	if len(allEntries) == 0 {
+		return nil, nil
+	}
+
+	return search.FindTopK(queryVec, allEntries, k), nil
 }
 
 // IndexInfo returns the number of indexed images in a folder.
@@ -210,8 +239,28 @@ func indexPathFor(folderPath string) string {
 	return filepath.Join(folderPath, indexFileName)
 }
 
-func findImages(folderPath string) ([]string, error) {
+func findImages(folderPath string, recursive bool) ([]string, error) {
 	var images []string
+
+	if !recursive {
+		entries, err := os.ReadDir(folderPath)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			ext := strings.ToLower(filepath.Ext(e.Name()))
+			switch ext {
+			case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp":
+				images = append(images, filepath.Join(folderPath, e.Name()))
+			}
+		}
+
+		return images, nil
+	}
 
 	err := filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -222,7 +271,6 @@ func findImages(folderPath string) ([]string, error) {
 			return nil
 		}
 
-		// TODO: validate image formats
 		ext := strings.ToLower(filepath.Ext(path))
 		switch ext {
 		case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp":

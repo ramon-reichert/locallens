@@ -2,20 +2,29 @@
 
 const state = {
     selectedPath: "",
+    selectedImage: "",
     childrenCache: {},
     expanded: new Set(),
     setupComplete: false,
+    currentImages: [],
+    pickerExpanded: new Set(),
+    pickerChildrenCache: {},
 };
 
+// Main UI elements
 const searchInput = document.getElementById("search-input");
 const searchBtn = document.getElementById("search-btn");
 const topkInput = document.getElementById("topk-input");
+const subfolderSearchCheck = document.getElementById("subfolder-search-check");
+const subfolderIndexCheck = document.getElementById("subfolder-index-check");
 const folderTree = document.getElementById("folder-tree");
 const indexBtn = document.getElementById("index-btn");
 const folderStatus = document.getElementById("folder-status");
 const resultsStatus = document.getElementById("results-status");
 const resultsGrid = document.getElementById("results-grid");
+const fileList = document.getElementById("file-list");
 
+// Setup elements
 const setupBtn = document.getElementById("setup-btn");
 const setupModal = document.getElementById("setup-modal");
 const setupWarning = document.getElementById("setup-warning");
@@ -24,13 +33,6 @@ const setupDownloadBtn = document.getElementById("setup-download-btn");
 const setupCloseBtn = document.getElementById("setup-close-btn");
 const setupProgress = document.getElementById("setup-progress");
 const setupProgressText = document.getElementById("setup-progress-text");
-
-indexBtn.addEventListener("click", indexFolder);
-searchBtn.addEventListener("click", doSearch);
-searchInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") doSearch();
-});
-
 const setupBrowseBtn = document.getElementById("setup-browse-btn");
 const folderPicker = document.getElementById("folder-picker");
 const folderPickerTree = document.getElementById("folder-picker-tree");
@@ -39,6 +41,12 @@ const folderPickerCancel = document.getElementById("folder-picker-cancel");
 
 let pickerSelectedPath = "";
 
+// Event listeners
+indexBtn.addEventListener("click", indexFolder);
+searchBtn.addEventListener("click", doSearch);
+searchInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") doSearch();
+});
 setupBtn.addEventListener("click", () => openSetup(false));
 setupCloseBtn.addEventListener("click", closeSetup);
 setupModal.querySelector(".modal-backdrop").addEventListener("click", closeSetup);
@@ -161,52 +169,106 @@ function handleSetupEvent(event) {
     }
 }
 
-// ---- Folder Picker ----
+// ---- Folder Picker (tree-based, like main tree) ----
 
 async function openFolderPicker() {
     pickerSelectedPath = setupPath.value.trim();
+    state.pickerExpanded = new Set();
+    state.pickerChildrenCache = {};
     folderPicker.classList.remove("hidden");
-    await renderPickerLevel("");
-}
-
-async function renderPickerLevel(path) {
-    const data = await fetchBrowse(path);
-    if (!data) return;
-
     folderPickerTree.innerHTML = "";
 
-    if (data.parent !== undefined && data.parent !== "") {
-        addPickerRow("..", data.parent, true);
-    } else if (data.current) {
-        addPickerRow("Drives", "", true);
-    }
+    const data = await fetchBrowse("");
+    if (!data) return;
 
     for (const folder of (data.folders || [])) {
-        addPickerRow(folder.name, folder.path, false);
+        const node = createPickerTreeNode(folder.name, folder.path, 0);
+        folderPickerTree.appendChild(node);
     }
 }
 
-function addPickerRow(name, path, isUp) {
-    const row = document.createElement("div");
-    row.className = "pick-row";
-    if (path === pickerSelectedPath) row.classList.add("selected");
+function createPickerTreeNode(name, path, depth) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "tree-node";
 
-    const icon = isUp ? "\u2190 " : "\uD83D\uDCC1 ";
-    row.textContent = icon + name;
-    row.title = path || "Root";
+    const row = document.createElement("div");
+    row.className = "tree-row";
+    if (path === pickerSelectedPath) row.classList.add("selected");
+    row.style.paddingLeft = (8 + depth * 16) + "px";
+
+    const arrow = document.createElement("span");
+    arrow.className = "tree-arrow";
+    arrow.textContent = "\u25B6";
+    if (state.pickerExpanded.has(path)) arrow.classList.add("expanded");
+    arrow.addEventListener("click", (e) => {
+        e.stopPropagation();
+        togglePickerExpand(path, wrapper, depth);
+    });
+
+    const icon = document.createElement("span");
+    icon.className = "tree-icon";
+    icon.textContent = "\uD83D\uDCC1";
+
+    const label = document.createElement("span");
+    label.className = "tree-label";
+    label.textContent = name;
+    label.title = path;
+
+    row.appendChild(arrow);
+    row.appendChild(icon);
+    row.appendChild(label);
 
     row.addEventListener("click", () => {
         pickerSelectedPath = path;
-        document.querySelectorAll(".pick-row.selected").forEach(el => el.classList.remove("selected"));
+        setupPath.value = path;
+        folderPickerTree.querySelectorAll(".tree-row.selected").forEach(el => el.classList.remove("selected"));
         row.classList.add("selected");
     });
 
-    row.addEventListener("dblclick", () => {
-        pickerSelectedPath = path;
-        renderPickerLevel(path);
-    });
+    wrapper.appendChild(row);
 
-    folderPickerTree.appendChild(row);
+    if (state.pickerExpanded.has(path)) {
+        renderPickerChildNodes(wrapper, path, depth);
+    }
+
+    return wrapper;
+}
+
+async function togglePickerExpand(path, wrapper, depth) {
+    if (state.pickerExpanded.has(path)) {
+        state.pickerExpanded.delete(path);
+        const children = wrapper.querySelector(".tree-children");
+        if (children) children.remove();
+        const arrow = wrapper.querySelector(".tree-arrow");
+        if (arrow) arrow.classList.remove("expanded");
+    } else {
+        state.pickerExpanded.add(path);
+        const arrow = wrapper.querySelector(".tree-arrow");
+        if (arrow) arrow.classList.add("expanded");
+        await renderPickerChildNodes(wrapper, path, depth);
+    }
+}
+
+async function renderPickerChildNodes(wrapper, path, depth) {
+    let children = wrapper.querySelector(".tree-children");
+    if (children) return;
+
+    let data = state.pickerChildrenCache[path];
+    if (!data) {
+        data = await fetchBrowse(path);
+        if (!data) return;
+        state.pickerChildrenCache[path] = data;
+    }
+
+    children = document.createElement("div");
+    children.className = "tree-children";
+
+    for (const folder of (data.folders || [])) {
+        const node = createPickerTreeNode(folder.name, folder.path, depth + 1);
+        children.appendChild(node);
+    }
+
+    wrapper.appendChild(children);
 }
 
 function requireSetup() {
@@ -325,9 +387,10 @@ async function renderChildNodes(wrapper, path, depth) {
 
 async function selectFolder(path) {
     state.selectedPath = path;
+    state.selectedImage = "";
 
-    document.querySelectorAll(".tree-row.selected").forEach((el) => el.classList.remove("selected"));
-    document.querySelectorAll(".tree-row").forEach((el) => {
+    document.querySelectorAll("#folder-tree .tree-row.selected").forEach((el) => el.classList.remove("selected"));
+    document.querySelectorAll("#folder-tree .tree-row").forEach((el) => {
         const label = el.querySelector(".tree-label");
         if (label && label.title === path) el.classList.add("selected");
     });
@@ -349,7 +412,7 @@ async function selectFolder(path) {
 }
 
 function findWrapperForPath(path) {
-    const labels = document.querySelectorAll(".tree-label");
+    const labels = document.querySelectorAll("#folder-tree .tree-label");
     for (const label of labels) {
         if (label.title === path) return label.closest(".tree-node");
     }
@@ -369,6 +432,7 @@ function getDepth(wrapper) {
 async function loadFolderImages(path) {
     const data = await loadChildren(path);
     const images = data.images || [];
+    state.currentImages = images;
 
     if (images.length > 0) {
         resultsStatus.textContent = `${images.length} images in folder`;
@@ -376,7 +440,102 @@ async function loadFolderImages(path) {
         resultsStatus.textContent = "No images in this folder";
     }
 
+    renderFileList(images);
     renderImages(images);
+}
+
+// ---- File List Panel ----
+
+function renderFileList(images) {
+    fileList.innerHTML = "";
+
+    for (let i = 0; i < images.length; i++) {
+        const img = images[i];
+        const row = document.createElement("div");
+        row.className = "file-row";
+        row.dataset.path = img.path;
+        if (img.path === state.selectedImage) row.classList.add("selected");
+
+        const icon = document.createElement("span");
+        icon.className = "file-icon";
+        icon.textContent = "\uD83D\uDDBC";
+
+        const name = document.createElement("span");
+        name.className = "file-name";
+        name.textContent = img.name;
+        name.title = img.path;
+
+        const status = document.createElement("span");
+        status.className = "file-status";
+        status.textContent = img.indexed ? "\u2705" : "\u2B1C";
+
+        row.appendChild(icon);
+        row.appendChild(name);
+        row.appendChild(status);
+
+        row.addEventListener("click", () => selectImage(img.path));
+        row.addEventListener("dblclick", () => openInExplorer(img.path));
+
+        fileList.appendChild(row);
+    }
+}
+
+function renderSearchFileList(results) {
+    fileList.innerHTML = "";
+
+    for (let i = 0; i < results.length; i++) {
+        const r = results[i];
+        const name = fileName(r.Path);
+        const row = document.createElement("div");
+        row.className = "file-row";
+        row.dataset.path = r.Path;
+        if (r.Path === state.selectedImage) row.classList.add("selected");
+
+        const icon = document.createElement("span");
+        icon.className = "file-icon";
+        icon.textContent = "\uD83D\uDDBC";
+
+        const nameEl = document.createElement("span");
+        nameEl.className = "file-name";
+        nameEl.textContent = name;
+        nameEl.title = r.Path;
+
+        const score = document.createElement("span");
+        score.className = "file-status";
+        score.textContent = `${(r.Score * 100).toFixed(0)}%`;
+        score.style.color = "#00d9ff";
+
+        row.appendChild(icon);
+        row.appendChild(nameEl);
+        row.appendChild(score);
+
+        row.addEventListener("click", () => selectImage(r.Path));
+        row.addEventListener("dblclick", () => openInExplorer(r.Path));
+
+        fileList.appendChild(row);
+    }
+}
+
+// ---- Selection Sync ----
+
+function selectImage(path) {
+    state.selectedImage = path;
+
+    // Highlight in file list + auto-scroll
+    fileList.querySelectorAll(".file-row.selected").forEach(el => el.classList.remove("selected"));
+    const fileRow = fileList.querySelector(`.file-row[data-path="${CSS.escape(path)}"]`);
+    if (fileRow) {
+        fileRow.classList.add("selected");
+        fileRow.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+
+    // Highlight in image grid + auto-scroll
+    resultsGrid.querySelectorAll(".result-card.selected").forEach(el => el.classList.remove("selected"));
+    const card = resultsGrid.querySelector(`.result-card[data-path="${CSS.escape(path)}"]`);
+    if (card) {
+        card.classList.add("selected");
+        card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
 }
 
 // ---- Controls ----
@@ -421,8 +580,12 @@ function renderSearchResults(results) {
 function createImageCard(path, name, indexed, score) {
     const card = document.createElement("div");
     card.className = "result-card";
+    card.dataset.path = path;
+    if (path === state.selectedImage) card.classList.add("selected");
+
+    card.addEventListener("click", () => selectImage(path));
     card.addEventListener("dblclick", () => openInExplorer(path));
-    card.title = "Double-click to open in Explorer";
+    card.title = name;
 
     const img = document.createElement("img");
     img.src = `/api/images?path=${encodeURIComponent(path)}`;
@@ -478,6 +641,8 @@ async function indexFolder() {
     if (requireSetup()) return;
     if (!state.selectedPath) return;
 
+    const recursive = subfolderIndexCheck.checked;
+
     indexBtn.disabled = true;
     folderStatus.textContent = "Indexing... this may take a while";
 
@@ -485,7 +650,7 @@ async function indexFolder() {
         const res = await fetch("/api/index", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ folder: state.selectedPath }),
+            body: JSON.stringify({ folder: state.selectedPath, recursive }),
         });
 
         if (res.status === 503) {
@@ -518,14 +683,16 @@ async function doSearch() {
     if (!query || !state.selectedPath) return;
 
     const k = parseInt(topkInput.value) || 10;
+    const recursive = subfolderSearchCheck.checked;
 
     searchBtn.disabled = true;
     resultsStatus.textContent = "Searching...";
     resultsGrid.innerHTML = "";
+    fileList.innerHTML = "";
 
     try {
         const res = await fetch(
-            `/api/search?q=${encodeURIComponent(query)}&folder=${encodeURIComponent(state.selectedPath)}&k=${k}`
+            `/api/search?q=${encodeURIComponent(query)}&folder=${encodeURIComponent(state.selectedPath)}&k=${k}&recursive=${recursive}`
         );
 
         if (res.status === 503) {
@@ -541,6 +708,8 @@ async function doSearch() {
         }
 
         resultsStatus.textContent = `${results.length} results for "${query}"`;
+        state.selectedImage = "";
+        renderSearchFileList(results);
         renderSearchResults(results);
     } catch {
         resultsStatus.textContent = "Search failed";

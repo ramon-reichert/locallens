@@ -83,7 +83,7 @@ func TestSimilarity(t *testing.T) {
 	defer svc.Close(ctx)
 
 	// Index the folder
-	count, err := svc.IndexFolder(ctx, tmp)
+	count, err := svc.IndexFolder(ctx, tmp, false)
 	if err != nil {
 		t.Fatalf("index folder: %v", err)
 	}
@@ -105,7 +105,7 @@ func TestSimilarity(t *testing.T) {
 	for _, query := range testQueries {
 		fmt.Printf("\nQuery: %q\n", query)
 
-		results, err := svc.Search(ctx, tmp, query, len(entries))
+		results, err := svc.Search(ctx, tmp, query, len(entries), false)
 		if err != nil {
 			t.Errorf("search %q: %v", query, err)
 			continue

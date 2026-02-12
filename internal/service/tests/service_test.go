@@ -60,7 +60,7 @@ func TestMain(m *testing.M) {
 
 	fmt.Println("\n===== TEST MAIN > IndexFolder =====")
 
-	count, err := svc.IndexFolder(ctx, testFolder)
+	count, err := svc.IndexFolder(ctx, testFolder, false)
 	if err != nil {
 		fmt.Printf("index folder: %v\n", err)
 		os.Exit(1)
@@ -114,7 +114,7 @@ func TestIndexPersistence(t *testing.T) {
 func TestSearch(t *testing.T) {
 	ctx := context.Background()
 
-	results, err := svc.Search(ctx, testFolder, "any image", 3)
+	results, err := svc.Search(ctx, testFolder, "any image", 3, false)
 	if err != nil {
 		t.Fatalf("search: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestSearch(t *testing.T) {
 
 	// Request more than available returns all
 	totalImages := svc.IndexInfo(testFolder)
-	allResults, err := svc.Search(ctx, testFolder, "anything", totalImages+10)
+	allResults, err := svc.Search(ctx, testFolder, "anything", totalImages+10, false)
 	if err != nil {
 		t.Fatalf("search all: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestSearchExpectedOrder(t *testing.T) {
 
 	for _, tc := range expectedSearchResults {
 		t.Run(tc.query, func(t *testing.T) {
-			results, err := svc.Search(ctx, testFolder, tc.query, mustMatch)
+			results, err := svc.Search(ctx, testFolder, tc.query, mustMatch, false)
 			if err != nil {
 				t.Fatalf("search: %v", err)
 			}
@@ -173,7 +173,7 @@ func TestSearchEmptyIndex(t *testing.T) {
 
 	emptyDir := t.TempDir()
 
-	results, err := svc.Search(ctx, emptyDir, "anything", 5)
+	results, err := svc.Search(ctx, emptyDir, "anything", 5, false)
 	if err != nil {
 		t.Fatalf("search: %v", err)
 	}

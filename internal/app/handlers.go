@@ -115,7 +115,8 @@ func (h *Handlers) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Folder string `json:"folder"`
+		Folder    string `json:"folder"`
+		Recursive bool   `json:"recursive"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -127,7 +128,7 @@ func (h *Handlers) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	count, err := svc.IndexFolder(r.Context(), req.Folder)
+	count, err := svc.IndexFolder(r.Context(), req.Folder, req.Recursive)
 	if err != nil {
 		h.log(r.Context(), "index error", "folder", req.Folder, "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -158,10 +159,12 @@ func (h *Handlers) handleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	recursive := r.URL.Query().Get("recursive") == "true"
+
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
 
-	results, err := svc.Search(ctx, folder, query, k)
+	results, err := svc.Search(ctx, folder, query, k, recursive)
 	if err != nil {
 		h.log(r.Context(), "search error", "query", query, "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
