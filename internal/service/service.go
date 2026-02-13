@@ -55,7 +55,9 @@ func New(cfg Config) *Service {
 
 // IndexFolder indexes all images in a folder.
 // Creates or updates a .locallens.index file inside the folder.
-// If recursive is true, it walks subdirectories.
+// If recursive is true, it indexes each subfolder separately, storing a
+// per-folder .locallens.index so that non-recursive search only sees images
+// from the selected folder.
 func (s *Service) IndexFolder(ctx context.Context, folderPath string, recursive bool) (int, error) {
 	images, err := findImages(folderPath, recursive)
 	if err != nil {
@@ -70,8 +72,20 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string, recursive 
 	start := time.Now()
 	s.log(ctx, "index folder", "found images", len(images))
 
-	idx := index.New(indexPathFor(folderPath))
-	idx.Load()
+	// Group images by their parent directory so each folder gets its own index.
+	byFolder := make(map[string][]string)
+	for _, imgPath := range images {
+		dir := filepath.Dir(imgPath)
+		byFolder[dir] = append(byFolder[dir], imgPath)
+	}
+
+	// Load all per-folder indexes.
+	indexes := make(map[string]*index.Index, len(byFolder))
+	for dir := range byFolder {
+		idx := index.New(indexPathFor(dir))
+		idx.Load()
+		indexes[dir] = idx
+	}
 
 	// Phase 1: Describe new images
 	descriptions := make(map[string]string)
@@ -81,7 +95,8 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string, recursive 
 	}
 
 	for _, imgPath := range images {
-		if _, exists := idx.Get(imgPath); exists {
+		dir := filepath.Dir(imgPath)
+		if _, exists := indexes[dir].Get(imgPath); exists {
 			s.log(ctx, "already indexed, skipping", "path", imgPath)
 			continue
 		}
@@ -119,7 +134,8 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string, recursive 
 				continue
 			}
 
-			idx.Add(index.Entry{
+			dir := filepath.Dir(imgPath)
+			indexes[dir].Add(index.Entry{
 				Path:        imgPath,
 				Description: desc,
 				Embedding:   vec,
@@ -131,13 +147,18 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string, recursive 
 		}
 	}
 
-	if err := idx.Save(); err != nil {
-		return 0, fmt.Errorf("save index: %w", err)
+	// Save each per-folder index.
+	total := 0
+	for _, idx := range indexes {
+		if err := idx.Save(); err != nil {
+			return 0, fmt.Errorf("save index: %w", err)
+		}
+		total += idx.Len()
 	}
 
-	s.log(ctx, "index folder", "indexed images", idx.Len(), "elapsed time", time.Since(start))
+	s.log(ctx, "index folder", "indexed images", total, "elapsed time", time.Since(start))
 
-	return idx.Len(), nil
+	return total, nil
 }
 
 // Search finds images similar to the query text in the given folder.

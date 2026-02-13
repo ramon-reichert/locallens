@@ -38,7 +38,7 @@ const (
 	ThresholdMinOutputLen         = 20  // Flag if output length < this
 )
 
-var defaultMaxSizes = []int{384} //64, 128, 256, 384, 512
+var defaultMaxSizes = []int{64, 384} //64, 128, 256, 384, 512
 
 var defaultConfigs = []ConfigVariant{
 	{"small", 1024, 8, 8, model.GGMLTypeQ8_0, model.GGMLTypeQ8_0},

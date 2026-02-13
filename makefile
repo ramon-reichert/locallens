@@ -7,6 +7,9 @@ EMBED_MODEL_URL  = https://huggingface.co/ggml-org/embeddinggemma-300m-qat-q8_0-
 build:
 	CGO_ENABLED=0 go build -ldflags "-H windowsgui" -o locallens.exe ./cmd/locallens/
 
+build-logs:
+	CGO_ENABLED=0 go build -o locallens.exe ./cmd/locallens/
+
 setup:
 	kronk libs --local
 	kronk model pull --local $(VISION_MODEL_URL) $(VISION_PROJ_URL)
