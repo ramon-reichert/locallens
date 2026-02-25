@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	DefaultMaxSide = 384
+	DefaultMaxSide = 64 //384
 	DefaultQuality = 90
 )
 

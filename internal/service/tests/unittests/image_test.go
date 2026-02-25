@@ -13,7 +13,7 @@ import (
 const testdataDir = "../testdata"
 
 func TestResize_JPEG(t *testing.T) {
-	imgPath := filepath.Join(testdataDir, "forest.jpg")
+	imgPath := filepath.Join(testdataDir, "parrot.jpg")
 
 	data, err := image.Resize(imgPath, image.DefaultMaxSide)
 	if err != nil {
@@ -76,7 +76,7 @@ func TestResize_CustomMaxSide(t *testing.T) {
 }
 
 func TestResize_OutputIsJPEG(t *testing.T) {
-	imgPath := filepath.Join(testdataDir, "lighthouse.jpg")
+	imgPath := filepath.Join(testdataDir, "parrot.jpg")
 
 	data, err := image.Resize(imgPath, image.DefaultMaxSide)
 	if err != nil {

@@ -77,8 +77,8 @@ func (d *Describer) Load(ctx context.Context) error {
 		ModelFiles:    d.paths.ModelFiles,
 		ProjFile:      d.paths.ProjFile,
 		ContextWindow: 1024,
-		NBatch:        8,
-		NUBatch:       8,
+		NBatch:        1024,
+		NUBatch:       1024,
 		CacheTypeK:    model.GGMLTypeQ8_0,
 		CacheTypeV:    model.GGMLTypeQ8_0,
 	}

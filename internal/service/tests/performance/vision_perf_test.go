@@ -41,7 +41,10 @@ const (
 var defaultMaxSizes = []int{64, 384} //64, 128, 256, 384, 512
 
 var defaultConfigs = []ConfigVariant{
-	{"small", 1024, 8, 8, model.GGMLTypeQ8_0, model.GGMLTypeQ8_0},
+	{"small", 1024, 1024, 1024, model.GGMLTypeQ8_0, model.GGMLTypeQ8_0},
+	//{"double", 2048, 1024, 1024, model.GGMLTypeQ8_0, model.GGMLTypeQ8_0},
+	//
+	{"large", 4096, 2048, 2048, model.GGMLTypeQ8_0, model.GGMLTypeQ8_0},
 }
 
 var P = description.P

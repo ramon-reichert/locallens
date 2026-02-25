@@ -45,7 +45,8 @@
 - Can we achieve more detailed descriptions sending separated prompts for each category(people characteristics, actions, etc)? NO, FOR NOW.
 
 - Image maxSize directly impacts inference time. 128px - 17s | 256px - 23s | 384px - 31s
-- 384px provide more precise descriptions (text, context, small details). Can be re-evaluated after search tests. 
+- 384px provide more precise descriptions (text, context, small details). Can be re-evaluated after search tests.
+- A test with this prompt - "Did you loaded an image? Just say yes or no." - show the time to "load" the image: 62px - 2,2s | 384px - 11,3s - Maybe there is a metric for that.
 
 - Big image maxSize(>384px) and restrictive/demanding prompts can cause model to fail responses when running with limited hardware, as mine. These two factors showed up to play a higher role in performance than model configs(considering viable values, at least) as cxtWindow, Nbatch and NUbatch.
 - Thanks to changes made to allow track yzma mtmd.HelperEvalChunks return codes, it is possible to see that big image maxSize(768, sometimes even 512) can cause a prefill error, KV_cache_full, totally corrupting the response;
@@ -62,6 +63,92 @@
 
 ### Some performance test outputs:
 more recents at top
+
+
+====================================================================================================
+CONFIGS
+====================================================================================================
+Model:       Qwen2-VL-2B-Instruct-Q4_K_M.gguf
+MMProj:      mmproj-Qwen2-VL-2B-Instruct-Q4_K_M.gguf
+MaxSizes:    [64 384]
+MaxTokens:   300
+Temperature: 0.1
+
+Prompt: You extract image keywords for semantic search.
+
+Describe this image in detail. Include:
+                        objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.
+
+
+Name       | CtxWin | NBatch | NUBatch |   CacheK |   CacheV
+----------------------------------------------------------------------
+small      |   1024 |   1024 |    1024 |     Q8_0 |     Q8_0
+large      |   4096 |   2048 |    2048 |     Q8_0 |     Q8_0
+
+====================================================================================================
+SUMMARY BY CONFIG + MAXSIZE
+====================================================================================================
+large    @ 64: avgTime  31352ms | avgTimeVar   0% | inTok   72 | outTok 206 | Tok/s  9.3
+large    @384: avgTime  25880ms | avgTimeVar   0% | inTok  182 | outTok 178 | Tok/s 10.6
+small    @ 64: avgTime  23020ms | avgTimeVar   0% | inTok   72 | outTok 175 | Tok/s 10.7
+small    @384: avgTime  26682ms | avgTimeVar   0% | inTok  182 | outTok 182 | Tok/s  9.9
+====================================================================================================
+
+====================================================================================================
+GROUPED RESULTS
+====================================================================================================
+Config   |  Max | Image           | AvgTime(ms) | TimeVar% |  InTok | OutTok | Tok/s |  Succ | Pressure
+--------------------------------------------------------------------------------------------------------------
+small    |   64 | forest.jpg      |       20289 |       0% |     72 |    134 |   9.9 |  100% |   1 runs
+small    |   64 | graduate.jpg    |       20992 |       0% |     72 |    113 |  10.0 |  100% |   1 runs
+small    |   64 | lighthouse.jpg  |       26875 |       0% |     72 |    191 |   9.5 |  100% |   1 runs
+small    |   64 | marvel.jpg      |       28916 |       0% |     70 |    300 |  13.4 |  100% |   1 runs
+small    |   64 | night.jpg       |       17600 |       0% |     72 |    147 |  13.3 |  100% |   1 runs
+small    |   64 | parrot.jpg      |       19903 |       0% |     72 |    129 |   9.8 |  100% |   1 runs
+small    |   64 | vietnam.jpg     |       28366 |       0% |     72 |    218 |   9.7 |  100% |   1 runs
+small    |   64 | wedding.jpg     |       21215 |       0% |     72 |    169 |   9.8 |  100% |   1 runs
+small    |  384 | forest.jpg      |       26042 |       0% |    172 |    146 |   8.2 |  100% |   1 runs
+small    |  384 | graduate.jpg    |       18329 |       0% |    186 |    120 |  13.4 |  100% |   1 runs
+small    |  384 | lighthouse.jpg  |       27238 |       0% |    214 |    155 |   9.8 |  100% |   1 runs
+small    |  384 | marvel.jpg      |       27414 |       0% |    144 |    218 |   9.8 |  100% |   1 runs
+small    |  384 | night.jpg       |       19170 |       0% |    186 |    115 |   9.9 |  100% |   1 runs
+small    |  384 | parrot.jpg      |       31407 |       0% |    186 |    237 |   9.8 |  100% |   1 runs
+small    |  384 | vietnam.jpg     |       37620 |       0% |    186 |    300 |   9.8 |  100% |   1 runs
+small    |  384 | wedding.jpg     |       26233 |       0% |    186 |    165 |   8.7 |  100% |   1 runs
+large    |   64 | forest.jpg      |       37810 |       0% |     72 |    300 |   9.1 |  100% |   1 runs
+large    |   64 | graduate.jpg    |       31156 |       0% |     72 |    144 |   7.6 |  100% |   1 runs
+large    |   64 | lighthouse.jpg  |       45667 |       0% |     72 |    130 |   6.4 |  100% |   1 runs
+large    |   64 | marvel.jpg      |       44200 |       0% |     70 |    300 |   9.6 |  100% |   1 runs
+large    |   64 | night.jpg       |       32462 |       0% |     72 |    267 |   9.5 |  100% |   1 runs
+large    |   64 | parrot.jpg      |       15049 |       0% |     72 |    148 |  12.8 |  100% |   1 runs
+large    |   64 | vietnam.jpg     |       25711 |       0% |     72 |    215 |   9.3 |  100% |   1 runs
+large    |   64 | wedding.jpg     |       18758 |       0% |     72 |    148 |   9.8 |  100% |   1 runs
+large    |  384 | forest.jpg      |       23048 |       0% |    172 |    144 |   9.6 |  100% |   1 runs
+large    |  384 | graduate.jpg    |       21564 |       0% |    186 |    119 |   9.5 |  100% |   1 runs
+large    |  384 | lighthouse.jpg  |       24655 |       0% |    214 |    175 |  13.0 |  100% |   1 runs
+large    |  384 | marvel.jpg      |       29293 |       0% |    144 |    300 |  13.3 |  100% |   1 runs
+large    |  384 | night.jpg       |       23616 |       0% |    186 |    123 |   9.1 |  100% |   1 runs
+large    |  384 | parrot.jpg      |       23563 |       0% |    186 |    139 |   9.1 |  100% |   1 runs
+large    |  384 | vietnam.jpg     |       41464 |       0% |    186 |    300 |   8.9 |  100% |   1 runs
+large    |  384 | wedding.jpg     |       19836 |       0% |    186 |    120 |  12.3 |  100% |   1 runs
+
+====================================================================================================
+MEMORY PRESSURE SUMMARY
+====================================================================================================
+Total runs:           32
+Runs with pressure:   32 (100.0%)
+  - Slow token:       0
+  - High page faults: 32
+  - Low RAM:          0
+  - Truncated output: 0
+Min available RAM:    1136 MB
+Max page faults:      267220
+====================================================================================================
+
+Grouped results saved to: results/vision/performVis_grp_20260225_151932.csv
+Individual results saved to: results/vision/performVis_ind_20260225_151932.csv
+
+
 
 ====================================================================================================
 CONFIGS
