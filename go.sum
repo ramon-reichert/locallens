@@ -30,6 +30,8 @@ github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapp
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.55.0/go.mod h1:Mf6O40IAyB9zR/1J8nGDDPirZQQPbYJni8Yisy7NTMc=
 github.com/MakeNowJust/heredoc v1.0.0 h1:cXCdzVdstXyiTqTvfqk9SDHpKNjxuom+DOlyEeQ4pzQ=
 github.com/MakeNowJust/heredoc v1.0.0/go.mod h1:mG5amYoWBHf8vpLOuehzbGGw0EHxpZZ6lCpQ4fNJ8LE=
+github.com/ardanlabs/kronk v1.20.0 h1:gsaE+fdhvJFABZpRdVgA/sippUyWO5irqGSvV/qnq9Q=
+github.com/ardanlabs/kronk v1.20.0/go.mod h1:M8lU4JomIiVxVKBqNZAyFgbAE9IESv9VW2eJ2Sh0kgw=
 github.com/aws/aws-sdk-go-v2 v1.41.1 h1:ABlyEARCDLN034NhxlRUSZr4l71mh+T5KAeGh6cerhU=
 github.com/aws/aws-sdk-go-v2 v1.41.1/go.mod h1:MayyLB8y+buD9hZqkCW3kX1AKq07Y5pXxtgB+rRFhz0=
 github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.4 h1:489krEF9xIGkOaaX3CE/Be2uWjiXrkCH6gUX+bZA/BU=
@@ -132,6 +134,8 @@ github.com/hashicorp/go-getter v1.8.4 h1:hGEd2xsuVKgwkMtPVufq73fAmZU/x65PPcqH3cb
 github.com/hashicorp/go-getter v1.8.4/go.mod h1:x27pPGSg9kzoB147QXI8d/nDvp2IgYGcwuRjpaXE9Yg=
 github.com/hashicorp/go-version v1.8.0 h1:KAkNb1HAiZd1ukkxDFGmokVZe1Xy9HG6NUp+bPle2i4=
 github.com/hashicorp/go-version v1.8.0/go.mod h1:fltr4n8CU8Ke44wwGCBoEymUuxUHl09ZGVZPK5anwXA=
+github.com/hybridgroup/yzma v1.10.1-0.20260224163708-1d64fab421f1 h1:W7yvIJ/KfA2wOxIygvXt7Qq0PzIJEfV0da45wVOzOpk=
+github.com/hybridgroup/yzma v1.10.1-0.20260224163708-1d64fab421f1/go.mod h1:gjqXCQrLTZgWli62IQ4bxsZA952SQh4ELTSpPbaisEg=
 github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=
 github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHmT4TnhNGBo=
 github.com/jupiterrider/ffi v0.6.0 h1:UX378KcZvH5c8qgLi9KL/bL82SZTHdRspZ+jj7bvBng=

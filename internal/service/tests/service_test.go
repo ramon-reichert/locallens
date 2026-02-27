@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ramon-reichert/locallens/internal/service"
@@ -192,6 +193,13 @@ func copyImages(src, dst string) error {
 
 	for _, entry := range entries {
 		if entry.IsDir() {
+			continue
+		}
+
+		ext := strings.ToLower(filepath.Ext(entry.Name()))
+		switch ext {
+		case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp":
+		default:
 			continue
 		}
 

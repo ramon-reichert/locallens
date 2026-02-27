@@ -16,11 +16,18 @@
 
 # To-do:
 
-- Make performance tests for the embedding too;
+- Performance vision test pointer missing
+
 - Kronk and system metrics at vision_perf_test.go:
   - See if batching for media models are working and get the returned error codes;
+  - See all metrics that can be returned to better understand model behavior
   - (TODOS about LowTok and Trunct) 
   - (adjust pagefaults/SECOND)
+- 
+- GPU is not being used!
+- See if model can use same image decoded to subsequent prompts;
+- Adjust embedding flow to be more accurate;
+- Make performance tests for the embedding too;
 - Search for "TODO" along the codebase;
 
 # Issues
@@ -63,6 +70,89 @@
 
 ### Some performance test outputs:
 more recents at top
+
+
+
+====================================================================================================
+CONFIGS
+====================================================================================================
+Model:       Qwen2-VL-2B-Instruct-Q4_K_M.gguf
+MMProj:      mmproj-Qwen2-VL-2B-Instruct-Q4_K_M.gguf
+MaxSizes:    [64 384]
+MaxTokens:   300
+Temperature: 0.1
+
+Prompt: You extract image keywords for semantic search.
+
+Describe this image in detail. Include:
+                        objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.
+
+
+Name       | CtxWin | NBatch | NUBatch |   CacheK |   CacheV
+----------------------------------------------------------------------
+small      |   1024 |   1024 |    1024 |     Q8_0 |     Q8_0
+large      |   4096 |   2048 |    2048 |     Q8_0 |     Q8_0
+
+====================================================================================================
+SUMMARY BY CONFIG + MAXSIZE
+====================================================================================================
+large    @ 64: avgTime  20572ms | avgTimeVar   0% | inTok   72 | outTok 181 | Tok/s 10.6
+large    @384: avgTime  36990ms | avgTimeVar   0% | inTok  182 | outTok 234 | Tok/s 10.2
+small    @ 64: avgTime  21949ms | avgTimeVar   0% | inTok   72 | outTok 202 | Tok/s 10.9
+small    @384: avgTime  68175ms | avgTimeVar   0% | inTok  182 | outTok 188 | Tok/s 10.6
+====================================================================================================
+
+====================================================================================================
+GROUPED RESULTS
+====================================================================================================
+Config   |  Max | Image           | AvgTime(ms) | TimeVar% |  InTok | OutTok | Tok/s |  Succ | Pressure
+--------------------------------------------------------------------------------------------------------------
+small    |   64 | forest.jpg      |       24670 |       0% |     72 |    228 |  10.8 |  100% |   1 runs
+small    |   64 | graduate.jpg    |       14298 |       0% |     72 |    118 |  10.9 |  100% |   1 runs
+small    |   64 | lighthouse.jpg  |       15570 |       0% |     72 |    132 |  11.0 |  100% |   1 runs
+small    |   64 | marvel.jpg      |       31155 |       0% |     70 |    300 |  10.8 |  100% |   1 runs
+small    |   64 | night.jpg       |       16062 |       0% |     72 |    139 |  10.9 |  100% |   1 runs
+small    |   64 | parrot.jpg      |       15274 |       0% |     72 |    137 |  11.4 |  100% |   1 runs
+small    |   64 | vietnam.jpg     |       27895 |       0% |     72 |    262 |  10.8 |  100% |   1 runs
+small    |   64 | wedding.jpg     |       30668 |       0% |     72 |    297 |  10.9 |  100% |   1 runs
+small    |  384 | forest.jpg      |       25884 |       0% |    172 |    157 |  11.0 |  100% |   1 runs
+small    |  384 | graduate.jpg    |       22808 |       0% |    186 |     92 |  10.4 |  100% |   1 runs
+small    |  384 | lighthouse.jpg  |      337686 |       0% |    214 |    275 |   9.8 |  100% |   1 runs
+small    |  384 | marvel.jpg      |       41202 |       0% |    144 |    300 |   9.9 |  100% |   1 runs
+small    |  384 | night.jpg       |       24219 |       0% |    186 |    122 |  11.1 |  100% |   1 runs
+small    |  384 | parrot.jpg      |       25063 |       0% |    186 |    132 |  11.0 |  100% |   1 runs
+small    |  384 | vietnam.jpg     |       40003 |       0% |    186 |    263 |  10.7 |  100% |   1 runs
+small    |  384 | wedding.jpg     |       28534 |       0% |    186 |    166 |  10.7 |  100% |   1 runs
+large    |   64 | forest.jpg      |       19581 |       0% |     72 |    184 |  11.3 |  100% |   1 runs
+large    |   64 | graduate.jpg    |       14545 |       0% |     72 |    122 |  11.1 |  100% |   1 runs
+large    |   64 | lighthouse.jpg  |       14866 |       0% |     72 |    129 |  11.1 |  100% |   1 runs
+large    |   64 | marvel.jpg      |       30068 |       0% |     70 |    300 |  11.2 |  100% |   1 runs
+large    |   64 | night.jpg       |       17340 |       0% |     72 |    137 |  10.1 |  100% |   1 runs
+large    |   64 | parrot.jpg      |       19756 |       0% |     72 |    161 |  10.3 |  100% |   1 runs
+large    |   64 | vietnam.jpg     |       28718 |       0% |     72 |    265 |  10.4 |  100% |   1 runs
+large    |   64 | wedding.jpg     |       19704 |       0% |     72 |    150 |   9.6 |  100% |   1 runs
+large    |  384 | forest.jpg      |       39365 |       0% |    172 |    262 |  10.5 |  100% |   1 runs
+large    |  384 | graduate.jpg    |       28545 |       0% |    186 |    153 |  10.4 |  100% |   1 runs
+large    |  384 | lighthouse.jpg  |       46003 |       0% |    214 |    300 |  10.0 |  100% |   1 runs
+large    |  384 | marvel.jpg      |       39979 |       0% |    144 |    300 |  10.3 |  100% |   1 runs
+large    |  384 | night.jpg       |       30392 |       0% |    186 |    156 |   9.5 |  100% |   1 runs
+large    |  384 | parrot.jpg      |       28511 |       0% |    186 |    148 |  10.6 |  100% |   1 runs
+large    |  384 | vietnam.jpg     |       44215 |       0% |    186 |    300 |  10.6 |  100% |   1 runs
+large    |  384 | wedding.jpg     |       38906 |       0% |    186 |    253 |  10.2 |  100% |   1 runs
+
+====================================================================================================
+Total runs:           32
+Runs with pressure:   32 (100.0%)
+  - Slow token:       0
+  - High page faults: 32
+  - Low RAM:          0
+  - Truncated output: 0
+Min available RAM:    24574 MB
+Max page faults:      266480
+====================================================================================================
+failed to save grouped CSV: open results/vision/performVis_grp_20260226_224716.csv: O sistema não pode encontrar o caminho especificado.
+failed to save individual CSV: open results/vision/performVis_ind_20260226_224716.csv: O sistema não pode encontrar o caminho especificado.
+
 
 
 ====================================================================================================
