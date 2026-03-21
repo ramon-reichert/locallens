@@ -158,7 +158,7 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (string, err
 		return "", fmt.Errorf("chat: %w", err)
 	}
 
-	description := resp.Choice[0].Message.Content
+	description := resp.Choices[0].Message.Content
 
 	d.log(ctx, "describe image", "elapsed time", time.Since(start), "description", description)
 	fmt.Println()

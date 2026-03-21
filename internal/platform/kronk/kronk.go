@@ -4,6 +4,8 @@ package kronk
 import (
 	"context"
 	"fmt"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/ardanlabs/kronk/sdk/kronk"
@@ -14,12 +16,26 @@ import (
 	"github.com/ramon-reichert/locallens/internal/platform/logger"
 )
 
-// TODO: put this consts in packages descrition and embedding
+// Model download URLs. These are the single source of truth for model
+// identifiers across the project. Update the makefile if these change.
 const (
 	VisionModelURL = "https://huggingface.co/ggml-org/Qwen2-VL-2B-Instruct-GGUF/resolve/main/Qwen2-VL-2B-Instruct-Q4_K_M.gguf"
 	VisionProjURL  = "https://huggingface.co/ggml-org/Qwen2-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen2-VL-2B-Instruct-Q8_0.gguf"
-	EmbedModelURL  = "https://huggingface.co/ggml-org/embeddinggemma-300m-qat-q8_0-GGUF/resolve/main/embeddinggemma-300m-qat-Q8_0.gguf"
+	//VisionModelURL = "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q8_0.gguf"
+	//VisionProjURL  = "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/mmproj-F16.gguf"
+	EmbedModelURL = "https://huggingface.co/ggml-org/embeddinggemma-300m-qat-q8_0-GGUF/resolve/main/embeddinggemma-300m-qat-Q8_0.gguf"
 )
+
+// Model IDs derived from URLs (filename without .gguf extension).
+var (
+	VisionModelID = modelIDFromURL(VisionModelURL)
+	EmbedModelID  = modelIDFromURL(EmbedModelURL)
+)
+
+func modelIDFromURL(url string) string {
+	name := path.Base(url)
+	return strings.TrimSuffix(name, path.Ext(name))
+}
 
 // ModelPaths holds the paths to downloaded model files.
 type ModelPaths struct {
@@ -54,12 +70,12 @@ func ResolvePaths(basePath string) (ModelPaths, error) {
 		return ModelPaths{}, fmt.Errorf("models new: %w", err)
 	}
 
-	vision, err := mdls.FullPath("Qwen2-VL-2B-Instruct-Q4_K_M")
+	vision, err := mdls.FullPath(VisionModelID)
 	if err != nil {
 		return ModelPaths{}, fmt.Errorf("resolve vision model: %w (run 'make setup' first)", err)
 	}
 
-	embed, err := mdls.FullPath("embeddinggemma-300m-qat-Q8_0")
+	embed, err := mdls.FullPath(EmbedModelID)
 	if err != nil {
 		return ModelPaths{}, fmt.Errorf("resolve embed model: %w (run 'make setup' first)", err)
 	}

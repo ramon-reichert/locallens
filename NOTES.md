@@ -68,6 +68,80 @@
 ### Some performance test outputs:
 more recents at top
 
+====================================================================================================
+HARDWARE
+====================================================================================================
+GPU:         CUDA0 (gpu_cuda) | 6143 MB total | 5105 MB free
+System RAM:  24955 MB
+GPU Offload: true
+
+====================================================================================================
+CONFIGS
+====================================================================================================
+Model:       Qwen2-VL-2B-Instruct-Q4_K_M.gguf
+MMProj:      mmproj-Qwen2-VL-2B-Instruct-Q4_K_M.gguf
+MaxSizes:    [128 256]
+MaxTokens:   300
+Temperature: 0.1
+
+Prompt: You extract image keywords for semantic search.
+
+Describe this image in detail. Include:
+                        objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.
+
+
+Name       | CtxWin | NBatch | NUBatch |   CacheK |   CacheV |   VRAM(MB) | KVSlot(MB) | GPU Use%
+----------------------------------------------------------------------------------------------------
+small      |   8192 |   2048 |    1024 |     Q8_0 |     Q8_0 |      934.7 |        0.0 |    15.2%
+
+====================================================================================================
+SUMMARY BY CONFIG + MAXSIZE
+====================================================================================================
+small    @128: avgTime   6426ms | ttft    170ms | avgTimeVar   0% | inTok   75 | outTok 225 | Tok/s 61.1
+small    @256: avgTime   6904ms | ttft    190ms | avgTimeVar   0% | inTok  112 | outTok 208 | Tok/s 51.5
+====================================================================================================
+
+==================================================================================================================================
+GROUPED RESULTS
+==================================================================================================================================
+Config   |  Max | Image           | AvgTime(ms) |  TTFT(ms) |   GenTime | TimeVar% |  InTok | OutTok | Tok/s |  Succ | Pressure
+----------------------------------------------------------------------------------------------------------------------------------
+small    |  128 | forest.jpg      |        4382 |       460 |      3922 |       0% |     75 |    300 |  95.4 |  100% |   0 runs
+small    |  128 | graduate.jpg    |        3003 |        67 |      2936 |       0% |     75 |    212 |  98.1 |  100% |   0 runs
+small    |  128 | lighthouse.jpg  |        4965 |        92 |      4873 |       0% |     80 |    118 |  28.6 |  100% |   0 runs
+small    |  128 | marvel.jpg      |       10907 |       143 |     10764 |       0% |     70 |    250 |  25.0 |  100% |   0 runs
+small    |  128 | night.jpg       |        4089 |       167 |      3922 |       0% |     75 |    300 |  95.4 |  100% |   0 runs
+small    |  128 | parrot.jpg      |        2434 |        68 |      2366 |       0% |     75 |    153 |  97.9 |  100% |   0 runs
+small    |  128 | vietnam.jpg     |       11882 |        89 |     11793 |       0% |     75 |    272 |  24.6 |  100% |   0 runs
+small    |  128 | wedding.jpg     |        9744 |       272 |      9472 |       0% |     75 |    197 |  23.5 |  100% |   0 runs
+small    |  256 | forest.jpg      |        4509 |       196 |      4313 |       0% |    105 |    274 |  85.3 |  100% |   0 runs
+small    |  256 | graduate.jpg    |        5238 |       116 |      5122 |       0% |    114 |    129 |  29.5 |  100% |   0 runs
+small    |  256 | lighthouse.jpg  |        2401 |       200 |      2201 |       0% |    123 |    134 |  95.9 |  100% |   0 runs
+small    |  256 | marvel.jpg      |        9050 |       109 |      8941 |       0% |     96 |    229 |  28.1 |  100% |   0 runs
+small    |  256 | night.jpg       |        8972 |       215 |      8757 |       0% |    114 |    213 |  26.8 |  100% |   0 runs
+small    |  256 | parrot.jpg      |       11074 |       222 |     10852 |       0% |    114 |    263 |  26.2 |  100% |   0 runs
+small    |  256 | vietnam.jpg     |       11414 |       233 |     11181 |       0% |    114 |    273 |  26.3 |  100% |   0 runs
+small    |  256 | wedding.jpg     |        2576 |       225 |      2351 |       0% |    114 |    145 |  94.3 |  100% |   0 runs
+
+====================================================================================================
+MEMORY PRESSURE SUMMARY
+====================================================================================================
+Total runs:           16
+Runs with pressure:   0 (0.0%)
+  - Slow token:       0
+  - High page faults: 0
+  - Low RAM:          0
+  - Truncated output: 0
+Min available RAM:    23644 MB
+Max page faults:      79571
+====================================================================================================
+
+Grouped results saved to: results\vision\performVis_grp_20260321_105733.csv
+Individual results saved to: results\vision\performVis_ind_20260321_105733.csv
+--- PASS: TestVisionPerformance (113.90s)
+PASS
+ok      github.com/ramon-reichert/locallens/internal/service/tests/performance  114.187s
+
 
 
 ====================================================================================================
