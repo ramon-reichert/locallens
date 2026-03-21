@@ -20,11 +20,8 @@
 
 - Kronk and system metrics at vision_perf_test.go:
   - See if batching for media models are working and get the returned error codes;
-  - See all metrics that can be returned to better understand model behavior
-  - (TODOS about LowTok and Trunct) 
-  - (adjust pagefaults/SECOND)
-- 
-- GPU is not being used!
+
+- Use grammar (Kronk)
 - See if model can use same image decoded to subsequent prompts;
 - Adjust embedding flow to be more accurate;
 - Make performance tests for the embedding too;
@@ -70,6 +67,63 @@
 
 ### Some performance test outputs:
 more recents at top
+
+
+
+====================================================================================================
+CONFIGS
+====================================================================================================
+Model:       Qwen2-VL-2B-Instruct-Q4_K_M.gguf
+MMProj:      mmproj-Qwen2-VL-2B-Instruct-Q4_K_M.gguf
+MaxSizes:    [64]
+MaxTokens:   300
+Temperature: 0.1
+
+Prompt: You extract image keywords for semantic search.
+
+Describe this image in detail. Include:
+                        objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.
+
+
+Name       | CtxWin | NBatch | NUBatch |   CacheK |   CacheV
+----------------------------------------------------------------------
+small      |   1024 |   1024 |    1024 |     Q8_0 |     Q8_0
+
+====================================================================================================
+SUMMARY BY CONFIG + MAXSIZE
+====================================================================================================
+small    @ 64: avgTime   2844ms | avgTimeVar   0% | inTok   72 | outTok 206 | Tok/s 108.4
+====================================================================================================
+
+====================================================================================================
+GROUPED RESULTS
+====================================================================================================
+Config   |  Max | Image           | AvgTime(ms) | TimeVar% |  InTok | OutTok | Tok/s |  Succ | Pressure
+--------------------------------------------------------------------------------------------------------------
+small    |   64 | .locallens.index |           0 |       0% |      0 |      0 |   0.0 |    0% |   0 runs
+small    |   64 | forest.jpg      |        3408 |       0% |     72 |    230 | 103.5 |  100% |   1 runs
+small    |   64 | graduate.jpg    |        1978 |       0% |     72 |    123 | 112.0 |  100% |   1 runs
+small    |   64 | lighthouse.jpg  |        2255 |       0% |     72 |    154 | 111.5 |  100% |   1 runs
+small    |   64 | marvel.jpg      |        3576 |       0% |     70 |    300 | 111.3 |  100% |   1 runs
+small    |   64 | night.jpg       |        2482 |       0% |     72 |    167 | 107.9 |  100% |   1 runs
+small    |   64 | parrot.jpg      |        2267 |       0% |     72 |    144 | 106.3 |  100% |   1 runs
+small    |   64 | vietnam.jpg     |        3326 |       0% |     72 |    255 | 107.1 |  100% |   1 runs
+small    |   64 | wedding.jpg     |        3461 |       0% |     72 |    277 | 107.7 |  100% |   1 runs
+
+====================================================================================================
+MEMORY PRESSURE SUMMARY
+====================================================================================================
+Total runs:           9
+Runs with pressure:   8 (88.9%)
+  - Slow token:       0
+  - High page faults: 8
+  - Low RAM:          0
+  - Truncated output: 0
+Min available RAM:    23389 MB
+Max page faults:      80061
+====================================================================================================
+failed to save grouped CSV: open results/vision/performVis_grp_20260304_180408.csv: O sistema não pode encontrar o caminho especificado.
+failed to save individual CSV: open results/vision/performVis_ind_20260304_180408.csv: O sistema não pode encontrar o caminho especificado.
 
 
 
