@@ -7,15 +7,18 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ramon-reichert/locallens/internal/platform/config"
 	"github.com/ramon-reichert/locallens/internal/service/image"
 )
 
 const testdataDir = "../testdata"
 
+var maxSideDefault = config.Defaults().Image.MaxSide
+
 func TestResize_JPEG(t *testing.T) {
 	imgPath := filepath.Join(testdataDir, "parrot.jpg")
 
-	data, err := image.Resize(imgPath, image.DefaultMaxSide)
+	data, err := image.Resize(imgPath, maxSideDefault)
 	if err != nil {
 		t.Fatalf("resize: %v", err)
 	}
@@ -30,8 +33,8 @@ func TestResize_JPEG(t *testing.T) {
 	}
 
 	bounds := img.Bounds()
-	if bounds.Dx() > image.DefaultMaxSide && bounds.Dy() > image.DefaultMaxSide {
-		t.Errorf("expected max side <= %d, got %dx%d", image.DefaultMaxSide, bounds.Dx(), bounds.Dy())
+	if bounds.Dx() > maxSideDefault && bounds.Dy() > maxSideDefault {
+		t.Errorf("expected max side <= %d, got %dx%d", maxSideDefault, bounds.Dx(), bounds.Dy())
 	}
 }
 
@@ -78,7 +81,7 @@ func TestResize_CustomMaxSide(t *testing.T) {
 func TestResize_OutputIsJPEG(t *testing.T) {
 	imgPath := filepath.Join(testdataDir, "parrot.jpg")
 
-	data, err := image.Resize(imgPath, image.DefaultMaxSide)
+	data, err := image.Resize(imgPath, maxSideDefault)
 	if err != nil {
 		t.Fatalf("resize: %v", err)
 	}
@@ -90,7 +93,7 @@ func TestResize_OutputIsJPEG(t *testing.T) {
 }
 
 func TestResize_FileNotFound(t *testing.T) {
-	_, err := image.Resize("nonexistent.jpg", image.DefaultMaxSide)
+	_, err := image.Resize("nonexistent.jpg", maxSideDefault)
 	if err == nil {
 		t.Error("expected error for nonexistent file")
 	}
@@ -106,7 +109,7 @@ func TestResize_InvalidImage(t *testing.T) {
 	tmpFile.WriteString("not an image")
 	tmpFile.Close()
 
-	_, err = image.Resize(tmpFile.Name(), image.DefaultMaxSide)
+	_, err = image.Resize(tmpFile.Name(), maxSideDefault)
 	if err == nil {
 		t.Error("expected error for invalid image")
 	}

@@ -4,8 +4,8 @@
 - Adapt prompt and search to different idioms;
 - Face recognition;
 - Configurable detail vs speed;
-- Run the tool inside local explorer browsers;
-- Run the tool inside photographers apps (adobe,etc);
+- Run the tool inside local explorer browsers; As a plugin?
+- Run the tool inside photographers apps (adobe,etc); As a plugin?
 - Run it in mobile;
 - Configuration adaptable to the user hardware constraints;
 - LocalEars to audio files;
@@ -16,10 +16,137 @@
 
 # To-do:
 
-- Performance vision test pointer missing
+- Implement review plan step by step:
+```
+Plan
+1. Centralize Configuration
+Create a single config.go definition in platform/kronk (or extend the existing platform/config) that holds everything currently scattered:
 
-- Kronk and system metrics at vision_perf_test.go:
-  - See if batching for media models are working and get the returned error codes;
+What goes in:
+
+Model URLs + derived IDs (already there)
+Vision model config: ContextWindow, NBatch, NUBatch, CacheTypeK, CacheTypeV — one struct used by both description.go and the perf test's default config
+Embed model config: same fields — used by both embedding.go and future embed perf tests
+Prompt config: SystemPrompt, UserPrompt, MaxTokens, Temperature — currently in description.P
+Image resize: DefaultMaxSide — currently in image.go
+What stays out:
+
+Perf test variant configs (the multiple configs like "small", "large" you iterate over) — those are test-specific exploration, not app defaults
+basePath, setupComplete — those stay in platform/config/config.json since they're user-specific runtime state
+Shape: A Go struct with defaults hardcoded as the baseline, but with a LoadFromFile(path) option that reads overrides from a JSON file. This way:
+
+The app works out of the box with sensible defaults (no JSON file needed)
+You or testers can drop a config.json to tweak model configs without recompiling
+The perf test's default config variant becomes "use the app defaults" so it always tests the real configuration
+2. Fix description.Describe()
+Error detection:
+
+Check resp.Choices[0].FinishReason() after Chat(). If it's model.FinishReasonError, return an error with the message content — don't pass decode errors as descriptions into the index.
+Progress tracking (for future ETA):
+
+After each successful Chat(), extract resp.Usage.TimeToFirstTokenMS and resp.Usage.TokensPerSecond and return them alongside the description string. A small result struct: {Description string, TTFT float64, TPS float64}.
+The service layer (IndexFolder) can accumulate these to compute a running average for ETA. No token counts, no Kronk internals — just the two numbers needed for remainingImages × (avgTTFT + maxTokens/avgTPS).
+Logging:
+
+Keep the current log with elapsed time and description (useful for debugging).
+Remove the stray fmt.Println().
+Don't log token-level metrics — those are for the perf test.
+3. Fix embedding.Embed()
+Error detection:
+
+Check resp.Data length (already done).
+Log resp.Usage.PromptTokens vs resp.Usage.TotalTokens only at debug level — if PromptTokens is unexpectedly low, the input was likely truncated. Not surfaced to the user, just available in logs.
+Progress tracking:
+
+Return elapsed time alongside the embedding vector so the service can include embed time in ETA. Simpler than the vision case since embedding is fast (~100ms) — a single elapsed duration is enough.
+4. Fix service.IndexFolder() — per-image tracking
+Current state: Logs total time at the end, no per-image breakdown.
+
+Change:
+
+After each Describe + Embed pair, accumulate TTFT and TPS from the describe result.
+Log per-image: image name + elapsed (already happens via describer/embedder logs — no new logging needed).
+At the end, log a summary: total images, total time, avg time per image, avg TTFT, avg TPS. This gives the foundation for the UI ETA feature later.
+5. Fix service_test.go — objective regression guard
+Goal: Catch errors, bad performance, bad behavior after code changes.
+
+Changes to TestMain (IndexFolder phase):
+
+Time the full IndexFolder call and print: indexed N images in Xs (avg Y ms/image).
+Print per-image descriptions so you can visually spot regressions (model change → worse descriptions).
+Changes to TestSearch:
+
+Time each search call and print: search "query" returned N results in Xms.
+Changes to TestSearchExpectedOrder:
+
+Always print scores, not just on failure. Format: query | pos | expected | got | score. This creates a baseline you can compare across runs — a score regression from 0.85 to 0.60 might not break ordering but signals a problem.
+Add a new TestIndexPerformance (lightweight):
+
+Not a full perf test — just assert that avg time per image is below a threshold (e.g., 60s). If a code change accidentally uses the wrong config or breaks batching, this catches it.
+Use the same config as the app (from the centralized config), not a custom test config. This ensures the test validates real behavior.
+6. Sync vision perf test default config with the app
+Current problem: Perf test uses ContextWindow: 8192, NBatch: 2048, NUBatch: 1024 while the app uses 1024/1024/1024. They test different things.
+
+Fix: The perf test's first config variant should always be the centralized app default. Additional variants ("large", "double") are explorations. This way one of your perf test rows always represents actual production behavior.
+
+Execution Order
+Step	What	Why first
+1	Centralize config	Everything else depends on it — describe, embed, tests all need to read from the same place
+2	Fix description.Describe()	Error detection + result struct with TTFT/TPS
+3	Fix embedding.Embed()	Minor — add elapsed to return
+4	Fix service.IndexFolder()	Use the new return values for summary logging
+5	Fix service_test.go	Add timing, scores, and descriptions to output
+6	Sync perf test default config	Point first variant at centralized config
+```
+
+- Make sure the setup flow in the app can detect the correct processor and use it. For now it is not using the GPU;
+- See why modelInfo is not returning KVSlot value in vision-perf-test:
+```
+Name       | CtxWin | NBatch | NUBatch |   CacheK |   CacheV |   VRAM(MB) | KVSlot(MB) | GPU Use%
+----------------------------------------------------------------------------------------------------
+app        |   8192 |   2048 |    1024 |     Q8_0 |     Q8_0 |      934.7 |        0.0 |    15.2%
+```
+
+- Review where config.go should live
+- Add fixed llama.cpp version to config.go. Download latest if not fixed.
+- Maybe do the same to kronk version. (allow-update=false)
+- Review pointer/value semantics and best pratices following Ardan Labs Conection new knowlodge
+- Atualize "Performance and configs" and "Considerations" fields here in notes.md
+- Look for suggested model config values at the model provider sites;
+- Investigate the bug that sometimes happen after a good decription to all subsequent files to index:
+```
+$ make test-performance-vision
+CGO_ENABLED=0 go test -timeout 60m -v -run TestVisionPerformance ./internal/service/tests/performance/...
+=== RUN   TestVisionPerformance
+ggml_cuda_init: found 1 CUDA devices (Total VRAM: 6143 MiB):
+  Device 0: NVIDIA GeForce RTX 2060, compute capability 7.5, VMM: yes, VRAM: 6143 MiB
+load_backend: loaded CUDA backend from C:\Users\Usuario\.kronk\libraries\ggml-cuda.dll
+load_backend: loaded RPC backend from C:\Users\Usuario\.kronk\libraries\ggml-rpc.dll
+load_backend: loaded CPU backend from C:\Users\Usuario\.kronk\libraries\ggml-cpu-haswell.dll
+====================================================================================================
+
+    === Config: app (ctx=8192, Nbatch=2048, NUbatch=1024) | maxTok=300, temp=0.1 | 1 reps ===
+
+    Model: Qwen2-VL-2B-Instruct-Q4_K_M | Type: dense | VRAM: 934.7 MB | KV Slots: 0.0 MB
+
+=> Run 1: forest.jpg | maxSize=128 | Config: app (ctx=8192, Nbatch=2048, NUbatch=1024) | maxTok=300, temp=0.1
+   Timing:  total=5988ms | ttft=361ms | gen=5627ms
+   Tokens:  in=73 out=127 (reason=0 compl=127) | Tok/s=26.1
+   Memory:  avlbRAM=22474MB pgFaults=81426
+   Description: The image depicts a serene forest scene, characterized by a dense canopy of trees. The trees are tall and slender, with their trunks reaching upwards into the sky. The leaves are a mix of green hues, indicating a healthy, thriving forest. The sunlight filters through the leaves, creating a dappled pattern on the forest floor. The ground is covered with a layer of fallen leaves and twigs, adding to the natural, untouched feel of the forest. The overall atmosphere is calm and peaceful, with no visible signs of human activity or modern structures. The background is filled with more trees, creating a dense, lush forest environment.
+
+
+     >>>> forest.jpg: maxSize=128 config=app || avgTime=5988ms | avgTTFT=361ms | timeVar=0% | 1/1 success
+
+
+=> Run 1: graduate.jpg | maxSize=128 | Config: app (ctx=8192, Nbatch=2048, NUbatch=1024) | maxTok=300, temp=0.1
+   Timing:  total=818ms | ttft=0ms | gen=818ms
+   Tokens:  in=0 out=0 (reason=0 compl=0) | Tok/s=0.0
+   Memory:  avlbRAM=22341MB pgFaults=10581 | FLAGS: [LowOutTok] [DECODE:-99-runtime error: slice bounds out of range [8388190:1]]
+   Description:
+
+   Error: decode error: runtime error: slice bounds out of range [8388190:1]
+   ```
 
 - Use grammar (Kronk)
 - See if model can use same image decoded to subsequent prompts;

@@ -37,7 +37,7 @@ func New(log logger.Logger) *Handlers {
 
 	cfg := config.Load()
 	if cfg.SetupComplete {
-		if err := h.initService(cfg.BasePath); err != nil {
+		if err := h.initService(cfg); err != nil {
 			log(context.Background(), "service init failed, setup may be needed", "error", err)
 		}
 	}
@@ -70,8 +70,8 @@ func (h *Handlers) Close(ctx context.Context) {
 	}
 }
 
-func (h *Handlers) initService(basePath string) error {
-	paths, err := kronk.ResolvePaths(basePath)
+func (h *Handlers) initService(cfg config.Config) error {
+	paths, err := kronk.ResolvePaths(cfg)
 	if err != nil {
 		return err
 	}
@@ -80,6 +80,7 @@ func (h *Handlers) initService(basePath string) error {
 		Log:         h.log,
 		VisionPaths: paths.Vision,
 		EmbedPaths:  paths.Embed,
+		AppCfg:      cfg,
 	})
 
 	h.mu.Lock()
@@ -315,7 +316,10 @@ func (h *Handlers) handleSetupRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := kronk.DownloadModels(ctx, log, req.BasePath)
+	cfg := config.Load()
+	cfg.BasePath = req.BasePath
+
+	_, err := kronk.DownloadModels(ctx, log, cfg)
 	if err != nil {
 		send("models", "error: "+err.Error())
 		return
@@ -323,15 +327,12 @@ func (h *Handlers) handleSetupRun(w http.ResponseWriter, r *http.Request) {
 	send("models", "complete")
 
 	send("init", "initializing")
-	if err := h.initService(req.BasePath); err != nil {
+	if err := h.initService(cfg); err != nil {
 		send("init", "error: "+err.Error())
 		return
 	}
 
-	cfg := config.Config{
-		BasePath:      req.BasePath,
-		SetupComplete: true,
-	}
+	cfg.SetupComplete = true
 	config.Save(cfg)
 
 	send("done", "complete")

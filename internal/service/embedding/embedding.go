@@ -12,6 +12,7 @@ import (
 	"github.com/ardanlabs/kronk/sdk/kronk/model"
 	"github.com/ardanlabs/kronk/sdk/tools/models"
 
+	"github.com/ramon-reichert/locallens/internal/platform/config"
 	"github.com/ramon-reichert/locallens/internal/platform/logger"
 )
 
@@ -24,6 +25,7 @@ var (
 type Embedder struct {
 	log   logger.Logger
 	paths models.Path
+	cfg   config.Config
 
 	mu  sync.Mutex
 	krn *kronk.Kronk
@@ -31,8 +33,9 @@ type Embedder struct {
 
 // Config holds configuration for creating an Embedder.
 type Config struct {
-	Log   logger.Logger
-	Paths models.Path
+	Log    logger.Logger
+	Paths  models.Path
+	AppCfg config.Config
 }
 
 // New creates an Embedder with the given configuration.
@@ -40,6 +43,7 @@ func New(cfg Config) *Embedder {
 	return &Embedder{
 		log:   cfg.Log,
 		paths: cfg.Paths,
+		cfg:   cfg.AppCfg,
 	}
 }
 
@@ -55,14 +59,21 @@ func (e *Embedder) Load(ctx context.Context) error {
 	start := time.Now()
 	e.log(ctx, "embedder load", "embedding model", e.paths.ModelFiles)
 
+	em := e.cfg.Embed
+
+	fa := model.FlashAttentionDisabled
+	if em.FlashAttention {
+		fa = model.FlashAttentionEnabled
+	}
+
 	cfg := model.Config{
 		ModelFiles:     e.paths.ModelFiles,
-		ContextWindow:  2048,
-		NBatch:         2048,
-		NUBatch:        512,
-		CacheTypeK:     model.GGMLTypeQ8_0,
-		CacheTypeV:     model.GGMLTypeQ8_0,
-		FlashAttention: model.FlashAttentionEnabled,
+		ContextWindow:  em.ContextWindow,
+		NBatch:         em.NBatch,
+		NUBatch:        em.NUBatch,
+		CacheTypeK:     model.GGMLType(config.ParseGGMLType(em.CacheTypeK)),
+		CacheTypeV:     model.GGMLType(config.ParseGGMLType(em.CacheTypeV)),
+		FlashAttention: fa,
 	}
 
 	krn, err := kronk.New(cfg)
@@ -71,9 +82,7 @@ func (e *Embedder) Load(ctx context.Context) error {
 	}
 
 	e.krn = krn
-	e.log(ctx, "embedder load",
-		"loading time", time.Since(start),
-	)
+	e.log(ctx, "embedder load", "loading time", time.Since(start))
 
 	return nil
 }

@@ -23,8 +23,8 @@ import (
 	"github.com/ardanlabs/kronk/sdk/kronk/model"
 	"github.com/ardanlabs/kronk/sdk/tools/devices"
 
+	"github.com/ramon-reichert/locallens/internal/platform/config"
 	"github.com/ramon-reichert/locallens/internal/platform/sysmon"
-	"github.com/ramon-reichert/locallens/internal/service/description"
 	"github.com/ramon-reichert/locallens/internal/service/image"
 	"github.com/ramon-reichert/locallens/internal/service/tests/testsboot"
 )
@@ -41,13 +41,16 @@ const (
 
 var defaultMaxSizes = []int{128, 256} //64, 128, 256, 384, 512
 
-var defaultConfigs = []ConfigVariant{
-	{"small", 8192, 2048, 1024, model.GGMLTypeQ8_0, model.GGMLTypeQ8_0},
-	//{"double", 2048, 1024, 1024, model.GGMLTypeQ8_0, model.GGMLTypeQ8_0},
-	//	{"large", 4096, 2048, 2048, model.GGMLTypeQ8_0, model.GGMLTypeQ8_0},
+// defaultConfigs returns test config variants. The first entry always matches
+// the app defaults so one test row represents real production behavior.
+func defaultConfigs() []ConfigVariant {
+	v := testsboot.Cfg.Vision
+	return []ConfigVariant{
+		{"app", v.ContextWindow, v.NBatch, v.NUBatch, model.GGMLType(config.ParseGGMLType(v.CacheTypeK)), model.GGMLType(config.ParseGGMLType(v.CacheTypeV))},
+		//{"double", 2048, 1024, 1024, model.GGMLTypeQ8_0, model.GGMLTypeQ8_0},
+		//{"large", 4096, 2048, 2048, model.GGMLTypeQ8_0, model.GGMLTypeQ8_0},
+	}
 }
-
-var P = description.P
 
 type ConfigVariant struct {
 	Name          string
@@ -154,13 +157,15 @@ type HardwareInfo struct {
 }
 
 type BenchmarkInfo struct {
-	ModelFile string
-	ProjFile  string
-	Prompt    string
-	Configs   []ConfigVariant
-	MaxSizes  []int
-	Memory    []ModelMemory
-	Hardware  HardwareInfo
+	ModelFile   string
+	ProjFile    string
+	Prompt      string
+	MaxTokens   int
+	Temperature float64
+	Configs     []ConfigVariant
+	MaxSizes    []int
+	Memory      []ModelMemory
+	Hardware    HardwareInfo
 }
 
 func TestVisionPerformance(t *testing.T) {
@@ -177,22 +182,26 @@ func TestVisionPerformance(t *testing.T) {
 		t.Skip("no test images found")
 	}
 
+	P := testsboot.Cfg.Prompt
 	fullPrompt := P.SystemPrompt + "\n\n" + P.UserPrompt + "\n"
+	configs := defaultConfigs()
 
 	hw := detectHardware()
 
 	info := BenchmarkInfo{
-		ModelFile: filepath.Base(testsboot.VisionPaths.ModelFiles[0]),
-		ProjFile:  filepath.Base(testsboot.VisionPaths.ProjFile),
-		Prompt:    fullPrompt,
-		Configs:   defaultConfigs,
-		MaxSizes:  defaultMaxSizes,
-		Hardware:  hw,
+		ModelFile:   filepath.Base(testsboot.VisionPaths.ModelFiles[0]),
+		ProjFile:    filepath.Base(testsboot.VisionPaths.ProjFile),
+		Prompt:      fullPrompt,
+		MaxTokens:   P.MaxTokens,
+		Temperature: P.Temperature,
+		Configs:     configs,
+		MaxSizes:    defaultMaxSizes,
+		Hardware:    hw,
 	}
 
 	var results []AggregatedResult
 
-	for _, cfg := range defaultConfigs {
+	for _, cfg := range configs {
 		fmt.Print(strings.Repeat("=", 100))
 		fmt.Printf("\n\n    === Config: %s (ctx=%d, Nbatch=%d, NUbatch=%d) | maxTok=%d, temp=%.1f | %d reps ===\n\n",
 			cfg.Name, cfg.ContextWindow, cfg.NBatch, cfg.NUBatch, P.MaxTokens, P.Temperature, repetitions)
@@ -224,7 +233,7 @@ func TestVisionPerformance(t *testing.T) {
 		for _, maxSize := range defaultMaxSizes {
 
 			for _, imgPath := range images {
-				aggResult := runWithRepetitions(ctx, krn, imgPath, cfg, maxSize, repetitions)
+				aggResult := runWithRepetitions(ctx, krn, imgPath, cfg, P, maxSize, repetitions)
 				results = append(results, aggResult)
 
 				fmt.Printf("     >>>> %s: maxSize=%d config=%s || avgTime=%.0fms | avgTTFT=%.0fms | timeVar=%.0f%% | %d/%d success\n\n\n",
@@ -251,7 +260,7 @@ func TestVisionPerformance(t *testing.T) {
 	saveCSV(info, results)
 }
 
-func runWithRepetitions(ctx context.Context, krn *kronksdk.Kronk, imgPath string, cfg ConfigVariant, maxSize, reps int) AggregatedResult {
+func runWithRepetitions(ctx context.Context, krn *kronksdk.Kronk, imgPath string, cfg ConfigVariant, P config.VisionPrompt, maxSize, reps int) AggregatedResult {
 	fullPrompt := P.SystemPrompt + "\n\n" + P.UserPrompt + "\n"
 
 	result := AggregatedResult{
@@ -290,7 +299,7 @@ func runWithRepetitions(ctx context.Context, krn *kronksdk.Kronk, imgPath string
 	}
 
 	for i := 0; i < reps; i++ {
-		run := runSingleInference(ctx, krn, imageData, i+1)
+		run := runSingleInference(ctx, krn, imageData, i+1, P)
 
 		fmt.Printf("=> Run %d: %s | maxSize=%d | Config: %s (ctx=%d, Nbatch=%d, NUbatch=%d) | maxTok=%d, temp=%.1f",
 			run.Run,
@@ -352,7 +361,7 @@ func runWithRepetitions(ctx context.Context, krn *kronksdk.Kronk, imgPath string
 	return result
 }
 
-func runSingleInference(ctx context.Context, krn *kronksdk.Kronk, imageData []byte, runNum int) RunResult {
+func runSingleInference(ctx context.Context, krn *kronksdk.Kronk, imageData []byte, runNum int, P config.VisionPrompt) RunResult {
 	run := RunResult{Run: runNum}
 
 	snapBefore := sysmon.Capture()
@@ -617,8 +626,8 @@ func printConfigs(info BenchmarkInfo) {
 	fmt.Printf("Model:       %s\n", info.ModelFile)
 	fmt.Printf("MMProj:      %s\n", info.ProjFile)
 	fmt.Printf("MaxSizes:    %v\n", info.MaxSizes)
-	fmt.Printf("MaxTokens:   %d\n", P.MaxTokens)
-	fmt.Printf("Temperature: %.1f\n", P.Temperature)
+	fmt.Printf("MaxTokens:   %d\n", info.MaxTokens)
+	fmt.Printf("Temperature: %.1f\n", info.Temperature)
 	fmt.Println()
 	fmt.Printf("Prompt: %s\n", info.Prompt)
 	fmt.Println()
@@ -863,7 +872,7 @@ func saveCSV(info BenchmarkInfo, results []AggregatedResult) {
 		sb.WriteString(fmt.Sprintf("\"%s\",\"%s\",%s,%s,%d,%.1f,\"%s\",",
 			info.ModelFile, info.ProjFile,
 			cacheTypeName(cfg.CacheTypeK), cacheTypeName(cfg.CacheTypeV),
-			P.MaxTokens, P.Temperature, prompt))
+			info.MaxTokens, info.Temperature, prompt))
 		sb.WriteString(fmt.Sprintf("%s,%d,%d,%d,%.1f,%.1f,",
 			cfg.Name, cfg.ContextWindow, cfg.NBatch, cfg.NUBatch, vramMB, slotMB))
 		sb.WriteString(fmt.Sprintf("%d,%s,%d,%d,%d,%d,%d,",

@@ -57,6 +57,7 @@ func TestMain(m *testing.M) {
 		Log:         testsboot.Log,
 		VisionPaths: testsboot.VisionPaths,
 		EmbedPaths:  testsboot.EmbedPaths,
+		AppCfg:      testsboot.Cfg,
 	})
 
 	fmt.Println("\n===== TEST MAIN > IndexFolder =====")

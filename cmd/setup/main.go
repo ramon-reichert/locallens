@@ -28,9 +28,9 @@ func run() error {
 
 	log := logger.New()
 
-	basePath := config.DefaultBasePath()
+	cfg := config.Load()
 	if v := os.Getenv("KRONK_BASE_PATH"); v != "" {
-		basePath = v
+		cfg.BasePath = v
 	}
 
 	log(ctx, "installing llama.cpp libraries")
@@ -43,8 +43,8 @@ func run() error {
 		return err
 	}
 
-	log(ctx, "downloading models", "basePath", basePath)
-	if _, err := kronk.DownloadModels(ctx, log, basePath); err != nil {
+	log(ctx, "downloading models", "basePath", cfg.BasePath)
+	if _, err := kronk.DownloadModels(ctx, log, cfg); err != nil {
 		return err
 	}
 

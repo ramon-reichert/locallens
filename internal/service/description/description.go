@@ -12,6 +12,7 @@ import (
 	"github.com/ardanlabs/kronk/sdk/kronk/model"
 	"github.com/ardanlabs/kronk/sdk/tools/models"
 
+	"github.com/ramon-reichert/locallens/internal/platform/config"
 	"github.com/ramon-reichert/locallens/internal/platform/logger"
 	"github.com/ramon-reichert/locallens/internal/service/image"
 )
@@ -19,28 +20,13 @@ import (
 var (
 	ErrModelNotLoaded = errors.New("vision model not loaded")
 	ErrEmptyImage     = errors.New("empty image data")
-
-	P = Prompt{
-		SystemPrompt: "You extract image keywords for semantic search.",
-		UserPrompt: `Describe this image in detail. Include:
-			objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.`,
-		MaxTokens:   300,
-		Temperature: 0.1,
-	}
 )
-
-// Prompt holds prompt values to be sent to the model inference.
-type Prompt struct {
-	SystemPrompt string
-	UserPrompt   string
-	MaxTokens    int
-	Temperature  float64
-}
 
 // Describer manages the vision model for image description.
 type Describer struct {
 	log   logger.Logger
 	paths models.Path
+	cfg   config.Config
 
 	mu  sync.Mutex
 	krn *kronk.Kronk
@@ -48,8 +34,9 @@ type Describer struct {
 
 // Config holds configuration for creating a Describer.
 type Config struct {
-	Log   logger.Logger
-	Paths models.Path
+	Log    logger.Logger
+	Paths  models.Path
+	AppCfg config.Config
 }
 
 // New creates a Describer with the given configuration.
@@ -57,6 +44,7 @@ func New(cfg Config) *Describer {
 	return &Describer{
 		log:   cfg.Log,
 		paths: cfg.Paths,
+		cfg:   cfg.AppCfg,
 	}
 }
 
@@ -72,15 +60,16 @@ func (d *Describer) Load(ctx context.Context) error {
 	start := time.Now()
 	d.log(ctx, "describer load", "vision model", d.paths.ModelFiles)
 
-	// TODO: tune this settings to fit app needs, maybe make it hardware dependent
+	v := d.cfg.Vision
+
 	cfg := model.Config{
 		ModelFiles:    d.paths.ModelFiles,
 		ProjFile:      d.paths.ProjFile,
-		ContextWindow: 1024,
-		NBatch:        1024,
-		NUBatch:       1024,
-		CacheTypeK:    model.GGMLTypeQ8_0,
-		CacheTypeV:    model.GGMLTypeQ8_0,
+		ContextWindow: v.ContextWindow,
+		NBatch:        v.NBatch,
+		NUBatch:       v.NUBatch,
+		CacheTypeK:    model.GGMLType(config.ParseGGMLType(v.CacheTypeK)),
+		CacheTypeV:    model.GGMLType(config.ParseGGMLType(v.CacheTypeV)),
 	}
 
 	krn, err := kronk.New(cfg)
@@ -89,9 +78,7 @@ func (d *Describer) Load(ctx context.Context) error {
 	}
 
 	d.krn = krn
-	d.log(ctx, "describer load",
-		"loading time", time.Since(start),
-	)
+	d.log(ctx, "describer load", "loading time", time.Since(start))
 
 	return nil
 }
@@ -132,23 +119,26 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (string, err
 		return "", ErrModelNotLoaded
 	}
 
-	d.log(ctx, "describe image", "resize to", image.DefaultMaxSide, "path", imagePath)
+	p := d.cfg.Prompt
+	maxSide := d.cfg.Image.MaxSide
 
-	imageData, err := image.Resize(imagePath, image.DefaultMaxSide)
+	d.log(ctx, "describe image", "resize to", maxSide, "path", imagePath)
+
+	imageData, err := image.Resize(imagePath, maxSide)
 	if err != nil {
 		return "", fmt.Errorf("resize image: %w", err)
 	}
 
 	messages := []model.D{
-		{"role": "system", "content": P.SystemPrompt},
+		{"role": "system", "content": p.SystemPrompt},
 		{"role": "user", "content": imageData},
-		{"role": "user", "content": P.UserPrompt},
+		{"role": "user", "content": p.UserPrompt},
 	}
 
 	data := model.D{
 		"messages":    messages,
-		"temperature": P.Temperature,
-		"max_tokens":  P.MaxTokens,
+		"temperature": p.Temperature,
+		"max_tokens":  p.MaxTokens,
 	}
 
 	start := time.Now()
@@ -161,6 +151,6 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (string, err
 	description := resp.Choices[0].Message.Content
 
 	d.log(ctx, "describe image", "elapsed time", time.Since(start), "description", description)
-	fmt.Println()
+
 	return description, nil
 }

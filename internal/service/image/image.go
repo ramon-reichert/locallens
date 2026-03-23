@@ -17,10 +17,7 @@ import (
 	"golang.org/x/image/draw"
 )
 
-const (
-	DefaultMaxSide = 64 //384
-	DefaultQuality = 90
-)
+const DefaultQuality = 90 //TODO: investigate better this parameter
 
 // Resize loads an image, resizes it for vision inference, and returns JPEG bytes.
 // If the image is already small enough, it still re-encodes to JPEG for consistency.

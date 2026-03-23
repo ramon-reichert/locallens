@@ -11,6 +11,7 @@ import (
 
 	"github.com/ardanlabs/kronk/sdk/tools/models"
 
+	"github.com/ramon-reichert/locallens/internal/platform/config"
 	"github.com/ramon-reichert/locallens/internal/platform/logger"
 	"github.com/ramon-reichert/locallens/internal/service/description"
 	"github.com/ramon-reichert/locallens/internal/service/embedding"
@@ -36,6 +37,7 @@ type Config struct {
 	Log         logger.Logger
 	VisionPaths models.Path
 	EmbedPaths  models.Path
+	AppCfg      config.Config
 }
 
 // New creates a Service with the given configuration.
@@ -43,12 +45,14 @@ func New(cfg Config) *Service {
 	return &Service{
 		log: cfg.Log,
 		describer: description.New(description.Config{
-			Log:   cfg.Log,
-			Paths: cfg.VisionPaths,
+			Log:    cfg.Log,
+			Paths:  cfg.VisionPaths,
+			AppCfg: cfg.AppCfg,
 		}),
 		embedder: embedding.New(embedding.Config{
-			Log:   cfg.Log,
-			Paths: cfg.EmbedPaths,
+			Log:    cfg.Log,
+			Paths:  cfg.EmbedPaths,
+			AppCfg: cfg.AppCfg,
 		}),
 	}
 }

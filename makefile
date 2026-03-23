@@ -7,7 +7,7 @@ build-logs:
 	CGO_ENABLED=0 go build -o locallens.exe ./cmd/locallens/
 
 # Download llama.cpp libraries and pull the vision and embedding GGUF models.
-# Model URLs are defined in internal/platform/kronk/kronk.go (single source of truth).
+# All config (model URLs, engine params, prompt) lives in internal/platform/config/config.go.
 setup:
 	CGO_ENABLED=0 go run ./cmd/setup/
 
