@@ -92,7 +92,12 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string, recursive 
 	}
 
 	// Phase 1: Describe new images
-	descriptions := make(map[string]string)
+	type descEntry struct {
+		desc string
+		ttft float64
+		tps  float64
+	}
+	descriptions := make(map[string]descEntry)
 
 	if err := s.describer.Load(ctx); err != nil {
 		return 0, fmt.Errorf("load describer: %w", err)
@@ -106,7 +111,7 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string, recursive 
 		}
 
 		imgCtx, imgCancel := context.WithTimeout(ctx, describeImageTimeout)
-		desc, err := s.describer.Describe(imgCtx, imgPath)
+		result, err := s.describer.Describe(imgCtx, imgPath)
 		imgCancel()
 
 		if err != nil {
@@ -114,7 +119,11 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string, recursive 
 			continue
 		}
 
-		descriptions[imgPath] = desc
+		descriptions[imgPath] = descEntry{
+			desc: result.Description,
+			ttft: result.TimeToFirstTokenMS,
+			tps:  result.TokensPerSecond,
+		}
 	}
 
 	if err := s.describer.Unload(ctx); err != nil {
@@ -127,11 +136,11 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string, recursive 
 			return 0, fmt.Errorf("load embedder: %w", err)
 		}
 
-		for imgPath, desc := range descriptions {
+		for imgPath, entry := range descriptions {
 			s.log(ctx, "embed image", "path", imgPath)
 
 			embedCtx, embedCancel := context.WithTimeout(ctx, embedTimeout)
-			vec, err := s.embedder.Embed(embedCtx, desc)
+			vec, err := s.embedder.Embed(embedCtx, entry.desc)
 			embedCancel()
 			if err != nil {
 				s.log(ctx, "embed error", "path", imgPath, "error", err)
@@ -141,7 +150,7 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string, recursive 
 			dir := filepath.Dir(imgPath)
 			indexes[dir].Add(index.Entry{
 				Path:        imgPath,
-				Description: desc,
+				Description: entry.desc,
 				Embedding:   vec,
 			})
 		}
@@ -160,7 +169,24 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string, recursive 
 		total += idx.Len()
 	}
 
-	s.log(ctx, "index folder", "indexed images", total, "elapsed time", time.Since(start))
+	// Log summary with timing breakdown from Kronk metrics.
+	var sumTTFT, sumTPS float64
+	described := len(descriptions)
+	for _, entry := range descriptions {
+		sumTTFT += entry.ttft
+		sumTPS += entry.tps
+	}
+
+	if described > 0 {
+		s.log(ctx, "index folder",
+			"indexed images", total,
+			"described", described,
+			"avg ttft ms", sumTTFT/float64(described),
+			"avg tok/s", sumTPS/float64(described),
+			"elapsed time", time.Since(start))
+	} else {
+		s.log(ctx, "index folder", "indexed images", total, "elapsed time", time.Since(start))
+	}
 
 	return total, nil
 }

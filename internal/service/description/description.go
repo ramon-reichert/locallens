@@ -22,6 +22,13 @@ var (
 	ErrEmptyImage     = errors.New("empty image data")
 )
 
+// DescribeResult holds the output of a Describe call.
+type DescribeResult struct {
+	Description        string
+	TimeToFirstTokenMS float64
+	TokensPerSecond    float64
+}
+
 // Describer manages the vision model for image description.
 type Describer struct {
 	log   logger.Logger
@@ -110,13 +117,13 @@ func (d *Describer) IsLoaded() bool {
 }
 
 // Describe generates a text description of the image at the given path.
-func (d *Describer) Describe(ctx context.Context, imagePath string) (string, error) {
+func (d *Describer) Describe(ctx context.Context, imagePath string) (DescribeResult, error) {
 	d.mu.Lock()
 	krn := d.krn
 	d.mu.Unlock()
 
 	if krn == nil {
-		return "", ErrModelNotLoaded
+		return DescribeResult{}, ErrModelNotLoaded
 	}
 
 	p := d.cfg.Prompt
@@ -126,7 +133,7 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (string, err
 
 	imageData, err := image.Resize(imagePath, maxSide)
 	if err != nil {
-		return "", fmt.Errorf("resize image: %w", err)
+		return DescribeResult{}, fmt.Errorf("resize image: %w", err)
 	}
 
 	messages := []model.D{
@@ -145,12 +152,26 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (string, err
 
 	resp, err := krn.Chat(ctx, data)
 	if err != nil {
-		return "", fmt.Errorf("chat: %w", err)
+		return DescribeResult{}, fmt.Errorf("chat: %w", err)
 	}
 
-	description := resp.Choices[0].Message.Content
+	if len(resp.Choices) > 0 && resp.Choices[0].FinishReason() == model.FinishReasonError {
+		errMsg := ""
+		if resp.Choices[0].Delta != nil {
+			errMsg = resp.Choices[0].Delta.Content
+		} else if resp.Choices[0].Message != nil {
+			errMsg = resp.Choices[0].Message.Content
+		}
+		return DescribeResult{}, fmt.Errorf("describe: model error: %s", errMsg)
+	}
 
-	d.log(ctx, "describe image", "elapsed time", time.Since(start), "description", description)
+	result := DescribeResult{
+		Description:        resp.Choices[0].Message.Content,
+		TimeToFirstTokenMS: resp.Usage.TimeToFirstTokenMS,
+		TokensPerSecond:    resp.Usage.TokensPerSecond,
+	}
 
-	return description, nil
+	d.log(ctx, "describe image", "elapsed time", time.Since(start), "description", result.Description)
+
+	return result, nil
 }
