@@ -85,6 +85,7 @@ type ImageConfig struct {
 type Config struct {
 	BasePath      string            `json:"basePath"`
 	SetupComplete bool              `json:"setupComplete"` // TODO: should it be here?
+	Processor     string            `json:"processor"`
 	Models        Models            `json:"models"`
 	Vision        VisionModelConfig `json:"visionModel"`
 	Embed         EmbedModelConfig  `json:"embedModel"`

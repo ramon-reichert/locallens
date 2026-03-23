@@ -4,6 +4,7 @@ package kronk
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/ardanlabs/kronk/sdk/kronk"
@@ -22,13 +23,32 @@ type ModelPaths struct {
 }
 
 // InstallDependencies downloads llama.cpp libraries, templates, and catalog.
-func InstallDependencies(ctx context.Context, log logger.Logger) error {
+// It uses cfg.Processor to select the correct GPU backend (e.g., "cuda",
+// "vulkan", "metal", "cpu"). When empty, auto-detects GPU hardware.
+// The KRONK_PROCESSOR env var takes precedence if set.
+func InstallDependencies(ctx context.Context, log logger.Logger, cfg config.Config) error {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
 
-	log(ctx, "installing dependencies")
+	// Config processor is used when KRONK_PROCESSOR env var is not set.
+	processor := cfg.Processor
+	if v := os.Getenv("KRONK_PROCESSOR"); v != "" {
+		processor = v
+	}
 
-	libsys, err := libs.New(libs.WithVersion(defaults.LibVersion("")))
+	log(ctx, "installing dependencies", "processor", processor)
+
+	opts := []libs.Option{libs.WithVersion(defaults.LibVersion(""))}
+
+	if processor != "" {
+		p, err := defaults.Processor(processor)
+		if err != nil {
+			return fmt.Errorf("parse processor %q: %w", processor, err)
+		}
+		opts = append(opts, libs.WithProcessor(p))
+	}
+
+	libsys, err := libs.New(opts...)
 	if err != nil {
 		return fmt.Errorf("llama.cpp libs new: %w", err)
 	}

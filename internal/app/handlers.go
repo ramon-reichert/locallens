@@ -302,8 +302,11 @@ func (h *Handlers) handleSetupRun(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := h.log
 
+	cfg := config.Load()
+	cfg.BasePath = req.BasePath
+
 	send("libs", "downloading")
-	if err := kronk.InstallDependencies(ctx, log); err != nil {
+	if err := kronk.InstallDependencies(ctx, log, cfg); err != nil {
 		send("libs", "error: "+err.Error())
 		return
 	}
@@ -315,9 +318,6 @@ func (h *Handlers) handleSetupRun(w http.ResponseWriter, r *http.Request) {
 		send("models", "error: "+err.Error())
 		return
 	}
-
-	cfg := config.Load()
-	cfg.BasePath = req.BasePath
 
 	_, err := kronk.DownloadModels(ctx, log, cfg)
 	if err != nil {

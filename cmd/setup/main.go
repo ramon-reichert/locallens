@@ -34,7 +34,7 @@ func run() error {
 	}
 
 	log(ctx, "installing llama.cpp libraries")
-	if err := kronk.InstallDependencies(ctx, log); err != nil {
+	if err := kronk.InstallDependencies(ctx, log, cfg); err != nil {
 		return err
 	}
 
