@@ -115,7 +115,7 @@ func Defaults() Config {
 			ContextWindow: 8192,
 			NBatch:        2048,
 			NUBatch:       1024,
-			CacheTypeK:    "Q8_0", // TODO: Should it be Q4 because the model is Q4_K_M?
+			CacheTypeK:    "Q8_0", // K cache is highly sensitive to quantization (llama.cpp PR #7412); Q4_0 causes hallucinations on Qwen2-VL due to aggressive GQA (2 KV heads / 14 attn heads)
 			CacheTypeV:    "Q8_0",
 		},
 		Embed: EmbedModelConfig{

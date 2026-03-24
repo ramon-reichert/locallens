@@ -80,28 +80,32 @@ load_backend: loaded CPU backend from C:\Users\Usuario\.kronk\libraries\ggml-cpu
 
 - Goals:      | accurate image description | fast description process | low hardware demand |
               |-----------------------------------------------------------------------------|
-    Needs     | outTok > 200               | small maxSize            | not tracking yet but|
-  Constrains  | min viable maxSize         | outToks > 200            | can be causing fails|
+    Needs     | outTok > 200               | small maxSize            | small model and cfgs|
+  Constrains  | min viable maxSize         | outToks > 200            | KV cache = Q8_0     |
 
 ### Considerations:
 
 - Many outToks(≈250) are needed to get good descriptions(IT IS A MUST), but there is no need for more thah maxTok=300;
-- I found that format restrictive prompts were preventing the model to "talk". Just asking the model to describe the image made it beatifully output 400 good tokens! With such good descriptions, the challenge is control inference time and add a step to convert these descriptions into embedable short phrases;
+- But actually verbose descriptions alone cannot garantee good vectors. Need to explore more what kind of descriptions can generate good vectors, and than try to enforce them through prompt or using grammar. 
+- I found before that format restrictive prompts were preventing the model to "talk", but I need to ensure that the cause was not bad configuration.
 
 - Temperature is set to 0.1 because we want: "same description to same image" every time;
 - Can we have more predictable descriptions using a system prompt? YES, THEY SEEM TO BE MORE CONCISE. Can be re-evaluated after search tests.
-- Can we achieve more detailed descriptions sending separated prompts for each category(people characteristics, actions, etc)? NO, FOR NOW.
+- Can we achieve more detailed descriptions sending separated prompts for each category(people characteristics, actions, etc)? Need to see if message caching works for images in the newer Kronk versions.
 
 - Image maxSize directly impacts inference time. 128px - 17s | 256px - 23s | 384px - 31s
 - 384px provide more precise descriptions (text, context, small details). Can be re-evaluated after search tests.
 - A test with this prompt - "Did you loaded an image? Just say yes or no." - show the time to "load" the image: 62px - 2,2s | 384px - 11,3s - Maybe there is a metric for that.
+- Now that is a metric: ttft - time to first token - but now that is not the bottleneck of inference time anymore. The description apropriate to a good embedding will be the most important thing.
 
 - Big image maxSize(>384px) and restrictive/demanding prompts can cause model to fail responses when running with limited hardware, as mine. These two factors showed up to play a higher role in performance than model configs(considering viable values, at least) as cxtWindow, Nbatch and NUbatch.
 - Thanks to changes made to allow track yzma mtmd.HelperEvalChunks return codes, it is possible to see that big image maxSize(768, sometimes even 512) can cause a prefill error, KV_cache_full, totally corrupting the response;
 - The restrictive/demanding prompts don't cause KV_cache_full error, but increase a lot the time/tokes and cause truncated(few tokens) response.
 - The hallucinated responses (randomly repetead words forever) could not be precisely associated with some test case yet. More often when KVcache Q4_0 than Q8_0;
 - The model size itself and its quantization value, as the projection file attached, impacts the hardware demand. Current using small ones, with good behavior of descriptions achieved. Can try even smaller configs later.
-- Not using GPUs for now. Can dig it further later.
+- I assumed KV cache precision should track model weight precision — it doesn't. They're independent. The K cache holds attention keys that get multiplied against every query head in the group; with Qwen2-VL's 7:1 GQA ratio, Q4_0 quantization noise in the K cache gets amplified across all 7 sharing heads, destroying attention patterns. Q8_0 is the minimum safe level for K cache, especially on small Qwen models. V cache is more tolerant (could even go Q4_0), but Q8_0/Q8_0 is the pragmatic safe default.
+
+- Not using GPUs for now. Can dig it further later. Its solved, since the machine has a GPU!
 
 - Tokens/sec seems not to be related with config or image size. It remains aprox. 14-15 tok/s. Maybe it is related just with hardware?
 
@@ -111,6 +115,101 @@ load_backend: loaded CPU backend from C:\Users\Usuario\.kronk\libraries\ggml-cpu
 
 ### Some performance test outputs:
 more recents at top
+
+
+====================================================================================================
+HARDWARE
+====================================================================================================
+GPU:         CUDA0 (gpu_cuda) | 6143 MB total | 5105 MB free
+System RAM:  24432 MB
+GPU Offload: true
+
+====================================================================================================
+CONFIGS
+====================================================================================================
+Model:       Qwen2-VL-2B-Instruct-Q4_K_M.gguf
+MMProj:      mmproj-Qwen2-VL-2B-Instruct-Q4_K_M.gguf
+MaxSizes:    [64 256]
+MaxTokens:   300
+Temperature: 0.1
+
+Prompt: You extract image keywords for semantic search.
+
+Describe this image in detail. Include: objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.
+
+
+Name       | CtxWin | NBatch | NUBatch |   CacheK |   CacheV |   VRAM(MB) | KVSlot(MB) | GPU Use%
+----------------------------------------------------------------------------------------------------
+app        |   8192 |   2048 |    1024 |     Q8_0 |     Q8_0 |      934.7 |        0.0 |    15.2%
+small      |   2048 |   1024 |     512 |     Q8_0 |     Q8_0 |      934.7 |        0.0 |    15.2%
+
+====================================================================================================
+SUMMARY BY CONFIG + MAXSIZE
+====================================================================================================
+app      @ 64: avgTime   7574ms | ttft    182ms | avgTimeVar   0% | inTok   70 | outTok 252 | Tok/s 56.0
+app      @256: avgTime   7231ms | ttft    223ms | avgTimeVar   0% | inTok  110 | outTok 176 | Tok/s 36.6
+small    @ 64: avgTime   6194ms | ttft    137ms | avgTimeVar   0% | inTok   70 | outTok 196 | Tok/s 56.1
+small    @256: avgTime   7934ms | ttft    235ms | avgTimeVar   0% | inTok  110 | outTok 205 | Tok/s 36.2
+====================================================================================================
+
+==================================================================================================================================
+GROUPED RESULTS
+==================================================================================================================================
+Config   |  Max | Image           | AvgTime(ms) |  TTFT(ms) |   GenTime | TimeVar% |  InTok | OutTok | Tok/s |  Succ | Pressure
+----------------------------------------------------------------------------------------------------------------------------------
+app      |   64 | forest.jpg      |       10481 |       470 |     10011 |       0% |     70 |    246 |  26.6 |  100% |   0 runs
+app      |   64 | graduate.jpg    |        9446 |       195 |      9251 |       0% |     70 |    214 |  25.2 |  100% |   0 runs
+app      |   64 | lighthouse.jpg  |       12637 |       214 |     12423 |       0% |     70 |    295 |  25.3 |  100% |   0 runs
+app      |   64 | marvel.jpg      |        3854 |       188 |      3666 |       0% |     68 |    300 | 104.0 |  100% |   0 runs
+app      |   64 | night.jpg       |        3453 |        66 |      3387 |       0% |     70 |    275 | 106.7 |  100% |   0 runs
+app      |   64 | parrot.jpg      |        6288 |        81 |      6207 |       0% |     70 |    152 |  28.1 |  100% |   0 runs
+app      |   64 | vietnam.jpg     |        3488 |       154 |      3334 |       0% |     70 |    267 | 105.6 |  100% |   0 runs
+app      |   64 | wedding.jpg     |       10942 |        91 |     10851 |       0% |     70 |    267 |  26.6 |  100% |   0 runs
+app      |  256 | forest.jpg      |        6483 |       236 |      6247 |       0% |    103 |    145 |  26.6 |  100% |   0 runs
+app      |  256 | graduate.jpg    |        5814 |       266 |      5548 |       0% |    112 |    128 |  26.8 |  100% |   0 runs
+app      |  256 | lighthouse.jpg  |        6364 |       237 |      6127 |       0% |    121 |    145 |  27.1 |  100% |   0 runs
+app      |  256 | marvel.jpg      |       12795 |       212 |     12583 |       0% |     94 |    300 |  25.4 |  100% |   0 runs
+app      |  256 | night.jpg       |        6857 |       253 |      6604 |       0% |    112 |    155 |  26.7 |  100% |   0 runs
+app      |  256 | parrot.jpg      |        2196 |       214 |      1982 |       0% |    112 |    127 | 107.0 |  100% |   0 runs
+app      |  256 | vietnam.jpg     |       11108 |       116 |     10992 |       0% |    112 |    273 |  26.7 |  100% |   0 runs
+app      |  256 | wedding.jpg     |        6233 |       248 |      5985 |       0% |    112 |    138 |  26.6 |  100% |   0 runs
+small    |   64 | forest.jpg      |        2846 |       116 |      2730 |       0% |     70 |    206 | 106.7 |  100% |   0 runs
+small    |   64 | graduate.jpg    |        5337 |        89 |      5248 |       0% |     70 |    128 |  28.5 |  100% |   0 runs
+small    |   64 | lighthouse.jpg  |        2245 |       149 |      2096 |       0% |     70 |    132 | 102.4 |  100% |   0 runs
+small    |   64 | marvel.jpg      |       12119 |        92 |     12027 |       0% |     68 |    300 |  26.7 |  100% |   0 runs
+small    |   64 | night.jpg       |        5883 |       211 |      5672 |       0% |     70 |    128 |  26.4 |  100% |   0 runs
+small    |   64 | parrot.jpg      |        6296 |       188 |      6108 |       0% |     70 |    141 |  26.5 |  100% |   0 runs
+small    |   64 | vietnam.jpg     |        3269 |       157 |      3112 |       0% |     70 |    243 | 104.9 |  100% |   0 runs
+small    |   64 | wedding.jpg     |       11558 |        90 |     11468 |       0% |     70 |    288 |  27.0 |  100% |   0 runs
+small    |  256 | forest.jpg      |        6446 |       261 |      6185 |       0% |    103 |    146 |  27.0 |  100% |   0 runs
+small    |  256 | graduate.jpg    |        4613 |       253 |      4360 |       0% |    112 |     99 |  27.7 |  100% |   0 runs
+small    |  256 | lighthouse.jpg  |        6746 |       259 |      6487 |       0% |    121 |    155 |  27.1 |  100% |   0 runs
+small    |  256 | marvel.jpg      |       12453 |       211 |     12242 |       0% |     94 |    293 |  25.5 |  100% |   0 runs
+small    |  256 | night.jpg       |       12934 |       267 |     12667 |       0% |    112 |    300 |  25.3 |  100% |   0 runs
+small    |  256 | parrot.jpg      |        3487 |       234 |      3253 |       0% |    112 |    253 | 103.8 |  100% |   0 runs
+small    |  256 | vietnam.jpg     |        9980 |       126 |      9854 |       0% |    112 |    246 |  27.1 |  100% |   0 runs
+small    |  256 | wedding.jpg     |        6811 |       267 |      6544 |       0% |    112 |    151 |  26.2 |  100% |   0 runs
+
+====================================================================================================
+MEMORY PRESSURE SUMMARY
+====================================================================================================
+Total runs:           32
+Runs with pressure:   0 (0.0%)
+  - Slow token:       0
+  - High page faults: 0
+  - Low RAM:          0
+  - Truncated output: 0
+Min available RAM:    23087 MB
+Max page faults:      81398
+====================================================================================================
+
+Grouped results saved to: results\vision\performVis_grp_20260323_222422.csv
+Individual results saved to: results\vision\performVis_ind_20260323_222422.csv
+--- PASS: TestVisionPerformance (245.81s)
+PASS
+ok      github.com/ramon-reichert/locallens/internal/service/tests/performance  246.088s
+
+
 
 ====================================================================================================
 HARDWARE

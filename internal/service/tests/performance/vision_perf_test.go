@@ -33,13 +33,13 @@ const (
 	DefaultRepetitions = 1
 
 	// Pressure detection thresholds
-	ThresholdSlowTPS    = 10.0   // Flag if Kronk's TokensPerSecond < this (at 10 tps, 300 tokens = 30s)
-	ThresholdPageFaults = 500000 // Flag if page faults delta > this (soft faults from mmap are normal)
-	ThresholdLowRAM_MB    = 500 // Flag if available RAM < this (MB)
-	ThresholdMinOutputTok = 20  // Flag if output tokens < this
+	ThresholdSlowTPS      = 10.0   // Flag if Kronk's TokensPerSecond < this (at 10 tps, 300 tokens = 30s)
+	ThresholdPageFaults   = 500000 // Flag if page faults delta > this (soft faults from mmap are normal)
+	ThresholdLowRAM_MB    = 500    // Flag if available RAM < this (MB)
+	ThresholdMinOutputTok = 20     // Flag if output tokens < this
 )
 
-var defaultMaxSizes = []int{128, 256} //64, 128, 256, 384, 512
+var defaultMaxSizes = []int{64, 256} //64, 128, 256, 384, 512
 
 // defaultConfigs returns test config variants. The first entry always matches
 // the app defaults so one test row represents real production behavior.
@@ -47,8 +47,7 @@ func defaultConfigs() []ConfigVariant {
 	v := testsboot.Cfg.Vision
 	return []ConfigVariant{
 		{"app", v.ContextWindow, v.NBatch, v.NUBatch, model.GGMLType(config.ParseGGMLType(v.CacheTypeK)), model.GGMLType(config.ParseGGMLType(v.CacheTypeV))},
-		//{"double", 2048, 1024, 1024, model.GGMLTypeQ8_0, model.GGMLTypeQ8_0},
-		//{"large", 4096, 2048, 2048, model.GGMLTypeQ8_0, model.GGMLTypeQ8_0},
+		{"small", 2048, 1024, 512, model.GGMLTypeQ8_0, model.GGMLTypeQ8_0},
 	}
 }
 
@@ -147,13 +146,13 @@ type ModelMemory struct {
 }
 
 type HardwareInfo struct {
-	GPUName        string
-	GPUType        string
-	GPUTotalMB     uint64
-	GPUFreeMB      uint64
-	HasGPU         bool
-	SystemRAM_MB   uint64
-	GPUOffload     bool
+	GPUName      string
+	GPUType      string
+	GPUTotalMB   uint64
+	GPUFreeMB    uint64
+	HasGPU       bool
+	SystemRAM_MB uint64
+	GPUOffload   bool
 }
 
 type BenchmarkInfo struct {
