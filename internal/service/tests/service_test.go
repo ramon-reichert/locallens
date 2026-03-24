@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ramon-reichert/locallens/internal/service"
 	"github.com/ramon-reichert/locallens/internal/service/tests/testsboot"
@@ -62,13 +63,15 @@ func TestMain(m *testing.M) {
 
 	fmt.Println("\n===== TEST MAIN > IndexFolder =====")
 
+	indexStart := time.Now()
 	count, err := svc.IndexFolder(ctx, testFolder, false)
 	if err != nil {
 		fmt.Printf("index folder: %v\n", err)
 		os.Exit(1)
 	}
+	indexElapsed := time.Since(indexStart)
 
-	fmt.Printf("indexed %d images\n", count)
+	fmt.Printf("indexed %d images in %v (avg %v per image)\n=============\n\n", count, indexElapsed, indexElapsed/time.Duration(count))
 
 	code := m.Run()
 
@@ -154,6 +157,11 @@ func TestSearchExpectedOrder(t *testing.T) {
 			results, err := svc.Search(ctx, testFolder, tc.query, mustMatch, false)
 			if err != nil {
 				t.Fatalf("search: %v", err)
+			}
+
+			t.Logf("query: %q", tc.query)
+			for i, r := range results {
+				t.Logf("  [%d] %.4f %s", i, r.Score, filepath.Base(r.Path))
 			}
 
 			for i, want := range tc.expected {

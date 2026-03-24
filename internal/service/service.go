@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	indexFileName       = ".locallens.index"
+	indexFileName        = ".locallens.index"
 	describeImageTimeout = 2 * time.Minute
 	embedTimeout         = 1 * time.Minute
 )
@@ -93,9 +93,10 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string, recursive 
 
 	// Phase 1: Describe new images
 	type descEntry struct {
-		desc string
-		ttft float64
-		tps  float64
+		desc    string
+		ttft    float64
+		tps     float64
+		embedMS float64
 	}
 	descriptions := make(map[string]descEntry)
 
@@ -140,18 +141,21 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string, recursive 
 			s.log(ctx, "embed image", "path", imgPath)
 
 			embedCtx, embedCancel := context.WithTimeout(ctx, embedTimeout)
-			vec, err := s.embedder.Embed(embedCtx, entry.desc)
+			result, err := s.embedder.Embed(embedCtx, entry.desc)
 			embedCancel()
 			if err != nil {
 				s.log(ctx, "embed error", "path", imgPath, "error", err)
 				continue
 			}
 
+			entry.embedMS = float64(result.Elapsed.Milliseconds())
+			descriptions[imgPath] = entry
+
 			dir := filepath.Dir(imgPath)
 			indexes[dir].Add(index.Entry{
 				Path:        imgPath,
 				Description: entry.desc,
-				Embedding:   vec,
+				Embedding:   result.Embedding,
 			})
 		}
 
@@ -170,22 +174,25 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string, recursive 
 	}
 
 	// Log summary with timing breakdown from Kronk metrics.
-	var sumTTFT, sumTPS float64
+	var sumTTFT, sumTPS, sumEmbedMS float64
 	described := len(descriptions)
 	for _, entry := range descriptions {
 		sumTTFT += entry.ttft
 		sumTPS += entry.tps
+		sumEmbedMS += entry.embedMS
 	}
 
 	if described > 0 {
+		n := float64(described)
 		s.log(ctx, "index folder",
 			"indexed images", total,
 			"described", described,
-			"avg ttft ms", sumTTFT/float64(described),
-			"avg tok/s", sumTPS/float64(described),
+			"avg ttft ms", sumTTFT/n,
+			"avg tok/s", sumTPS/n,
+			"avg embed ms", sumEmbedMS/n,
 			"elapsed time", time.Since(start))
 	} else {
-		s.log(ctx, "index folder", "indexed images", total, "elapsed time", time.Since(start))
+		s.log(ctx, "\n=============\nindex folder", "indexed images", total, "elapsed time", time.Since(start))
 	}
 
 	return total, nil
@@ -204,11 +211,12 @@ func (s *Service) Search(ctx context.Context, folderPath string, query string, k
 	}
 
 	embedCtx, embedCancel := context.WithTimeout(ctx, embedTimeout)
-	queryVec, err := s.embedder.Embed(embedCtx, query)
+	embedResult, err := s.embedder.Embed(embedCtx, query)
 	embedCancel()
 	if err != nil {
 		return nil, fmt.Errorf("embed query: %w", err)
 	}
+	queryVec := embedResult.Embedding
 
 	var allEntries []search.Entry
 

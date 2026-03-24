@@ -57,7 +57,7 @@ func (e *Embedder) Load(ctx context.Context) error {
 	}
 
 	start := time.Now()
-	e.log(ctx, "embedder load", "embedding model", e.paths.ModelFiles)
+	e.log(ctx, "\n=============\nembedder load", "embedding model", e.paths.ModelFiles)
 
 	em := e.cfg.Embed
 
@@ -113,18 +113,24 @@ func (e *Embedder) IsLoaded() bool {
 	return e.krn != nil
 }
 
+// EmbedResult holds the output of an Embed call.
+type EmbedResult struct {
+	Embedding []float32
+	Elapsed   time.Duration
+}
+
 // Embed converts text into a vector embedding.
-func (e *Embedder) Embed(ctx context.Context, text string) ([]float32, error) {
+func (e *Embedder) Embed(ctx context.Context, text string) (EmbedResult, error) {
 	e.mu.Lock()
 	krn := e.krn
 	e.mu.Unlock()
 
 	if krn == nil {
-		return nil, ErrModelNotLoaded
+		return EmbedResult{}, ErrModelNotLoaded
 	}
 
 	if text == "" {
-		return nil, ErrEmptyText
+		return EmbedResult{}, ErrEmptyText
 	}
 
 	data := model.D{
@@ -135,13 +141,18 @@ func (e *Embedder) Embed(ctx context.Context, text string) ([]float32, error) {
 	start := time.Now()
 	resp, err := krn.Embeddings(ctx, data)
 	if err != nil {
-		return nil, fmt.Errorf("embeddings: %w", err)
+		return EmbedResult{}, fmt.Errorf("embeddings: %w", err)
 	}
 
 	if len(resp.Data) == 0 {
-		return nil, errors.New("no embedding data returned")
+		return EmbedResult{}, errors.New("no embedding data returned")
 	}
 
-	e.log(ctx, "embed image", "elapsed time", time.Since(start))
-	return resp.Data[0].Embedding, nil
+	elapsed := time.Since(start)
+	e.log(ctx, "embed image", "elapsed time", elapsed)
+
+	return EmbedResult{
+		Embedding: resp.Data[0].Embedding,
+		Elapsed:   elapsed,
+	}, nil
 }
