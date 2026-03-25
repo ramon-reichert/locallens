@@ -28,9 +28,9 @@ app        |   8192 |   2048 |    1024 |     Q8_0 |     Q8_0 |      934.7 |     
 - Maybe do the same to kronk version. (allow-update=false)
 - Vendor
 - Review pointer/value semantics and best pratices following Ardan Labs Conection new knowlodge
-- Atualize "Performance and configs" and "Considerations" fields here in notes.md
 - Look for suggested model config values at the model provider sites;
 - Investigate the bug that sometimes happen after a good decription to all subsequent files to index:
+ problably a problem with jinja/gonja templates >> amp threads continue T-019d1d8e-8897-719f-b6b1-01885c2ffb1b  
 ```
 $ make test-performance-vision
 CGO_ENABLED=0 go test -timeout 60m -v -run TestVisionPerformance ./internal/service/tests/performance/...
