@@ -16,13 +16,6 @@
 
 # To-do:
 
-- See why modelInfo is not returning KVSlot value in vision-perf-test:
-```
-Name       | CtxWin | NBatch | NUBatch |   CacheK |   CacheV |   VRAM(MB) | KVSlot(MB) | GPU Use%
-----------------------------------------------------------------------------------------------------
-app        |   8192 |   2048 |    1024 |     Q8_0 |     Q8_0 |      934.7 |        0.0 |    15.2%
-```
-
 - Review where config.go should live
 - Add fixed llama.cpp version to config.go. Download latest if not fixed.
 - Maybe do the same to kronk version. (allow-update=false)
@@ -107,14 +100,113 @@ load_backend: loaded CPU backend from C:\Users\Usuario\.kronk\libraries\ggml-cpu
 
 - Not using GPUs for now. Can dig it further later. Its solved, since the machine has a GPU!
 
-- Tokens/sec seems not to be related with config or image size. It remains aprox. 14-15 tok/s. Maybe it is related just with hardware?
+- Tokens/sec seems not to be related with config or image size. It remains aprox. 14-15 tok/s. Maybe it is related just with hardware? No, it varies across same hardware runs, maybe related with memory demand on the hardware at inference time.
 
-- inToks is always the same, despite model config and image maxSize. Maybe it is related with the prompt? YES
+- inToks is always the same, despite model config and image maxSize. Maybe it is related with the prompt? YES, with the prompt AND image size.
+
+- Until now, we reach avg description times of 24sec/img(just CPU, 8GB RAM) and 7sec/img(6GB VRAM GPU, 32GB RAM) with good descriptions, but bad search similarity;
 
 
 
 ### Some performance test outputs:
 more recents at top
+
+====================================================================================================
+HARDWARE
+====================================================================================================
+GPU:         none
+System RAM:  2220 MB
+GPU Offload: true
+
+====================================================================================================
+CONFIGS
+====================================================================================================
+Model:       Qwen2-VL-2B-Instruct-Q4_K_M.gguf
+MMProj:      mmproj-Qwen2-VL-2B-Instruct-Q4_K_M.gguf
+MaxSizes:    [64 256]
+MaxTokens:   300
+Temperature: 0.1
+
+Prompt: You extract image keywords for semantic search.
+
+Describe this image in detail. Include: objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.
+
+
+Name       | CtxWin | NBatch | NUBatch |   CacheK |   CacheV |   VRAM(MB) | KVSlot(MB) | RAM Use%
+----------------------------------------------------------------------------------------------------
+app        |   8192 |   2048 |    1024 |     Q8_0 |     Q8_0 |      934.7 |        0.0 |    42.1%
+small      |   2048 |   1024 |     512 |     Q8_0 |     Q8_0 |      934.7 |        0.0 |    42.1%
+
+====================================================================================================
+SUMMARY BY CONFIG + MAXSIZE
+====================================================================================================
+app      @ 64: avgTime  29887ms | ttft   1684ms | avgTimeVar   0% | inTok   70 | outTok 202 | Tok/s 10.4
+app      @256: avgTime  23747ms | ttft   3333ms | avgTimeVar   0% | inTok  110 | outTok 180 | Tok/s  9.8
+small    @ 64: avgTime  24481ms | ttft   1276ms | avgTimeVar   0% | inTok   70 | outTok 225 | Tok/s 10.3
+small    @256: avgTime  24557ms | ttft   3156ms | avgTimeVar   0% | inTok  110 | outTok 183 | Tok/s  9.1
+====================================================================================================
+
+==================================================================================================================================
+GROUPED RESULTS
+==================================================================================================================================
+Config   |  Max | Image           | AvgTime(ms) |  TTFT(ms) |   GenTime | TimeVar% |  InTok | OutTok | Tok/s |  Succ | Pressure
+----------------------------------------------------------------------------------------------------------------------------------
+app      |   64 | .locallens.index |           0 |         0 |         0 |       0% |      0 |      0 |   0.0 |    0% |   0 runs
+app      |   64 | forest.jpg      |       35873 |      4690 |     31183 |       0% |     70 |    233 |   9.8 |  100% |   1 runs
+app      |   64 | graduate.jpg    |       23476 |      1197 |     22279 |       0% |     70 |    114 |   9.9 |  100% |   1 runs
+app      |   64 | lighthouse.jpg  |       28282 |      1250 |     27032 |       0% |     70 |    162 |   9.9 |  100% |   1 runs
+app      |   64 | marvel.jpg      |       42323 |      1348 |     40975 |       0% |     68 |    299 |   9.9 |  100% |   1 runs
+app      |   64 | night.jpg       |       27869 |      1238 |     26631 |       0% |     70 |    172 |   9.8 |  100% |   1 runs
+app      |   64 | parrot.jpg      |       21455 |      1274 |     20181 |       0% |     70 |    126 |  10.0 |  100% |   1 runs
+app      |   64 | vietnam.jpg     |       22325 |      1190 |     21135 |       0% |     70 |    213 |  13.7 |  100% |   0 runs
+app      |   64 | wedding.jpg     |       37490 |      1283 |     36207 |       0% |     70 |    300 |   9.9 |  100% |   1 runs
+app      |  256 | .locallens.index |           0 |         0 |         0 |       0% |      0 |      0 |   0.0 |    0% |   0 runs
+app      |  256 | forest.jpg      |       27795 |      2600 |     25195 |       0% |    103 |    197 |   9.9 |  100% |   1 runs
+app      |  256 | graduate.jpg    |       19687 |      2983 |     16704 |       0% |    112 |    127 |   9.9 |  100% |   1 runs
+app      |  256 | lighthouse.jpg  |       18578 |      4307 |     14271 |       0% |    121 |    121 |   9.9 |  100% |   1 runs
+app      |  256 | marvel.jpg      |       33312 |      2713 |     30599 |       0% |     94 |    286 |   9.9 |  100% |   1 runs
+app      |  256 | night.jpg       |       20982 |      3258 |     17724 |       0% |    112 |    156 |   9.8 |  100% |   1 runs
+app      |  256 | parrot.jpg      |       16974 |      2978 |     13996 |       0% |    112 |    131 |   9.9 |  100% |   1 runs
+app      |  256 | vietnam.jpg     |       32599 |      3728 |     28871 |       0% |    112 |    272 |   9.7 |  100% |   1 runs
+app      |  256 | wedding.jpg     |       20052 |      4098 |     15954 |       0% |    112 |    150 |   9.9 |  100% |   1 runs
+small    |   64 | .locallens.index |           0 |         0 |         0 |       0% |      0 |      0 |   0.0 |    0% |   0 runs
+small    |   64 | forest.jpg      |       20274 |      1439 |     18835 |       0% |     70 |    179 |   9.9 |  100% |   1 runs
+small    |   64 | graduate.jpg    |       15213 |      1267 |     13946 |       0% |     70 |    131 |  10.0 |  100% |   1 runs
+small    |   64 | lighthouse.jpg  |       32219 |      1288 |     30931 |       0% |     70 |    300 |   9.9 |  100% |   1 runs
+small    |   64 | marvel.jpg      |       32319 |      1188 |     31131 |       0% |     68 |    300 |   9.9 |  100% |   1 runs
+small    |   64 | night.jpg       |       13819 |      1290 |     12529 |       0% |     70 |    159 |  13.6 |  100% |   0 runs
+small    |   64 | parrot.jpg      |       22049 |      1289 |     20760 |       0% |     70 |    189 |   9.5 |  100% |   1 runs
+small    |   64 | vietnam.jpg     |       29445 |      1241 |     28204 |       0% |     70 |    271 |   9.9 |  100% |   1 runs
+small    |   64 | wedding.jpg     |       30508 |      1207 |     29301 |       0% |     70 |    274 |   9.6 |  100% |   1 runs
+small    |  256 | .locallens.index |           0 |         0 |         0 |       0% |      0 |      0 |   0.0 |    0% |   0 runs
+small    |  256 | forest.jpg      |       19379 |      3190 |     16189 |       0% |    103 |    127 |   8.2 |  100% |   1 runs
+small    |  256 | graduate.jpg    |       14807 |      2954 |     11853 |       0% |    112 |    106 |   9.6 |  100% |   1 runs
+small    |  256 | lighthouse.jpg  |       17076 |      3536 |     13540 |       0% |    121 |    119 |   9.4 |  100% |   1 runs
+small    |  256 | marvel.jpg      |       35042 |      2199 |     32843 |       0% |     94 |    300 |   9.4 |  100% |   1 runs
+small    |  256 | night.jpg       |       34242 |      3124 |     31118 |       0% |    112 |    252 |   9.1 |  100% |   1 runs
+small    |  256 | parrot.jpg      |       20819 |      3423 |     17396 |       0% |    112 |    141 |   9.0 |  100% |   1 runs
+small    |  256 | vietnam.jpg     |       35268 |      3242 |     32026 |       0% |    112 |    280 |   9.0 |  100% |   1 runs
+small    |  256 | wedding.jpg     |       19821 |      3583 |     16238 |       0% |    112 |    142 |   9.2 |  100% |   1 runs
+
+====================================================================================================
+MEMORY PRESSURE SUMMARY
+====================================================================================================
+Total runs:           36
+Runs with pressure:   30 (83.3%)
+  - Slow token:       30
+  - High page faults: 0
+  - Low RAM:          0
+  - Truncated output: 0
+Min available RAM:    954 MB
+Max page faults:      265864
+====================================================================================================
+
+Grouped results saved to: results\vision\performVis_grp_20260325_143938.csv
+Individual results saved to: results\vision\performVis_ind_20260325_143938.csv
+--- PASS: TestVisionPerformance (845.98s)
+PASS
+ok      github.com/ramon-reichert/locallens/internal/service/tests/performance  846.196s
+
 
 
 ====================================================================================================

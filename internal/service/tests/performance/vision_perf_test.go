@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -47,7 +48,7 @@ func defaultConfigs() []ConfigVariant {
 	v := testsboot.Cfg.Vision
 	return []ConfigVariant{
 		{"app", v.ContextWindow, v.NBatch, v.NUBatch, model.GGMLType(config.ParseGGMLType(v.CacheTypeK)), model.GGMLType(config.ParseGGMLType(v.CacheTypeV))},
-		{"small", 2048, 1024, 512, model.GGMLTypeQ8_0, model.GGMLTypeQ8_0},
+		//	{"small", 2048, 1024, 512, model.GGMLTypeQ8_0, model.GGMLTypeQ8_0},
 	}
 }
 
@@ -220,14 +221,39 @@ func TestVisionPerformance(t *testing.T) {
 		}
 
 		mi := krn.ModelInfo()
+
+		slotMem := mi.SlotMemory
+		if slotMem == 0 {
+			slotMem = estimateSlotMemory(mi, cfg)
+		}
+
 		info.Memory = append(info.Memory, ModelMemory{
 			ConfigName: cfg.Name,
 			VRAMTotal:  mi.VRAMTotal,
-			SlotMemory: mi.SlotMemory,
+			SlotMemory: slotMem,
 		})
 
 		fmt.Printf("    Model: %s | Type: %s | VRAM: %.1f MB | KV Slots: %.1f MB\n\n",
-			mi.ID, mi.Type, float64(mi.VRAMTotal)/(1024*1024), float64(mi.SlotMemory)/(1024*1024))
+			mi.ID, mi.Type, float64(mi.VRAMTotal)/(1024*1024), float64(slotMem)/(1024*1024))
+
+		// Warmup: run a tiny inference to trigger lazy initialization (projector
+		// loading, GPU buffer allocation, etc.) so the first real measurement is
+		// not penalized by one-time startup costs.
+		warmupImage, warmupErr := image.Resize(images[0], 64)
+		if warmupErr == nil {
+			fmt.Printf("    Warmup run...")
+			warmupStart := time.Now()
+			warmupData := model.D{
+				"messages": []model.D{
+					{"role": "user", "content": warmupImage},
+					{"role": "user", "content": "hi"},
+				},
+				"temperature": 0.0,
+				"max_tokens":  1,
+			}
+			krn.Chat(ctx, warmupData)
+			fmt.Printf(" done (%dms)\n\n", time.Since(warmupStart).Milliseconds())
+		}
 
 		for _, maxSize := range defaultMaxSizes {
 
@@ -644,7 +670,7 @@ func printConfigs(info BenchmarkInfo) {
 		var vramMB, slotMB float64
 		for _, mem := range info.Memory {
 			if mem.ConfigName == cfg.Name {
-				vramMB = float64(mem.VRAMTotal) / (1024 * 1024)
+				vramMB = float64(mem.VRAMTotal) / (1024 * 1024) // VRAMTotal = llama.ModelSize + SlotMemory
 				slotMB = float64(mem.SlotMemory) / (1024 * 1024)
 				break
 			}
@@ -662,6 +688,95 @@ func printConfigs(info BenchmarkInfo) {
 			cacheTypeName(cfg.CacheTypeK), cacheTypeName(cfg.CacheTypeV),
 			vramMB, slotMB, usePct)
 	}
+}
+
+// estimateSlotMemory computes KV cache slot memory when Kronk's ModelInfo
+// returns 0 (e.g. because the GGUF metadata lacks attention.key_length or
+// attention.value_length).
+// Formula: nSeqMax * contextWindow * blockCount * headCountKV * (keyLen + valLen) * bytesPerElement
+func estimateSlotMemory(mi model.ModelInfo, cfg ConfigVariant) int64 {
+	arch := mi.Metadata["general.architecture"]
+	if arch == "" {
+		return 0
+	}
+
+	parseInt := func(key string) (int64, bool) {
+		v, ok := mi.Metadata[key]
+		if !ok {
+			return 0, false
+		}
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return 0, false
+		}
+		return n, true
+	}
+
+	blockCount, ok := parseInt(arch + ".block_count")
+	if !ok {
+		return 0
+	}
+
+	headCountKV, ok := parseInt(arch + ".attention.head_count_kv")
+	if !ok {
+		headCountKV, ok = parseInt(arch + ".attention.head_count")
+		if !ok {
+			return 0
+		}
+	}
+
+	headCount, _ := parseInt(arch + ".attention.head_count")
+
+	// Derive key/value lengths from embedding_length / head_count when the
+	// explicit metadata keys are absent.
+	keyLen, okK := parseInt(arch + ".attention.key_length")
+	valLen, okV := parseInt(arch + ".attention.value_length")
+	if (!okK || !okV) && headCount > 0 {
+		embLen, okE := parseInt(arch + ".embedding_length")
+		if okE {
+			dim := embLen / headCount
+			if !okK {
+				keyLen = dim
+			}
+			if !okV {
+				valLen = dim
+			}
+		} else {
+			return 0
+		}
+	}
+	if keyLen == 0 || valLen == 0 {
+		return 0
+	}
+
+	bytesPerElement := cacheGGMLBytes(cfg.CacheTypeK, cfg.CacheTypeV)
+	contextWindow := int64(cfg.ContextWindow)
+
+	kvPerTokenPerLayer := headCountKV * (keyLen + valLen) * bytesPerElement
+	kvPerSlot := contextWindow * blockCount * kvPerTokenPerLayer
+
+	return kvPerSlot
+}
+
+func cacheGGMLBytes(typeK, typeV model.GGMLType) int64 {
+	ggmlBytes := func(t model.GGMLType) int64 {
+		switch t {
+		case model.GGMLTypeF16, model.GGMLTypeBF16:
+			return 2
+		case model.GGMLTypeQ8_0:
+			return 1
+		case model.GGMLTypeQ4_0, model.GGMLTypeQ4_1:
+			return 1
+		default:
+			return 2
+		}
+	}
+	bk := ggmlBytes(typeK)
+	bv := ggmlBytes(typeV)
+	if bk > bv {
+		return bk
+	}
+	return bv
 }
 
 func cacheTypeName(t model.GGMLType) string {
@@ -811,10 +926,21 @@ func printConfigSummary(results []AggregatedResult) {
 
 	for _, k := range keys {
 		stats := configStats[k]
+
+		// When repetitions > 1, avgCV is the average of per-image CVs.
+		// When repetitions == 1, per-image CV is always 0, so we compute
+		// the CV across all images in this config+maxSize group instead.
 		avgCV := 0.0
-		if stats.count > 0 {
+		if stats.count > 0 && stats.cvSum > 0 {
 			avgCV = stats.cvSum / float64(stats.count) * 100
+		} else if len(stats.times) > 1 {
+			sd := stddev(stats.times)
+			m := mean(stats.times)
+			if m > 0 {
+				avgCV = sd / m * 100
+			}
 		}
+
 		fmt.Printf("%-8s @%3d: avgTime %6.0fms | ttft %6.0fms | avgTimeVar %3.0f%% | inTok %4.0f | outTok %3.0f | Tok/s %4.1f\n",
 			k.config, k.maxSize,
 			mean(stats.times),
