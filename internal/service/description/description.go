@@ -10,7 +10,6 @@ import (
 
 	"github.com/ardanlabs/kronk/sdk/kronk"
 	"github.com/ardanlabs/kronk/sdk/kronk/model"
-	"github.com/ardanlabs/kronk/sdk/tools/models"
 
 	"github.com/ramon-reichert/locallens/internal/platform/config"
 	"github.com/ramon-reichert/locallens/internal/platform/logger"
@@ -32,7 +31,7 @@ type DescribeResult struct {
 // Describer manages the vision model for image description.
 type Describer struct {
 	log   logger.Logger
-	paths models.Path
+	paths config.ModelFilePaths
 	cfg   config.Config
 
 	mu  sync.Mutex
@@ -42,7 +41,7 @@ type Describer struct {
 // Config holds configuration for creating a Describer.
 type Config struct {
 	Log    logger.Logger
-	Paths  models.Path
+	Paths  config.ModelFilePaths
 	AppCfg config.Config
 }
 

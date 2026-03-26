@@ -93,6 +93,13 @@ type Config struct {
 	Image         ImageConfig       `json:"image"`
 }
 
+// ModelFilePaths holds resolved file system paths for a single model.
+// This is the project's own type, decoupled from the Kronk SDK's models.Path.
+type ModelFilePaths struct {
+	ModelFiles []string
+	ProjFile   string
+}
+
 // DefaultBasePath returns the default base path for model storage.
 func DefaultBasePath() string {
 	home, err := os.UserHomeDir()

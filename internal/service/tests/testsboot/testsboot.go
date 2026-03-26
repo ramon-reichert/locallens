@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	kronksdk "github.com/ardanlabs/kronk/sdk/kronk"
-	"github.com/ardanlabs/kronk/sdk/tools/models"
 
 	"github.com/ramon-reichert/locallens/internal/platform/config"
 	"github.com/ramon-reichert/locallens/internal/platform/kronk"
@@ -15,8 +14,8 @@ import (
 
 var (
 	once        sync.Once
-	VisionPaths models.Path
-	EmbedPaths  models.Path
+	VisionPaths config.ModelFilePaths
+	EmbedPaths  config.ModelFilePaths
 	Log         logger.Logger
 	Cfg         config.Config
 )

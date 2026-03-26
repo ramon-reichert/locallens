@@ -16,10 +16,10 @@ import (
 	"github.com/ramon-reichert/locallens/internal/platform/logger"
 )
 
-// ModelPaths holds the paths to downloaded model files.
+// ModelPaths holds the resolved file paths for all models.
 type ModelPaths struct {
-	Vision models.Path
-	Embed  models.Path
+	Vision config.ModelFilePaths
+	Embed  config.ModelFilePaths
 }
 
 // InstallDependencies downloads llama.cpp libraries, templates, and catalog.
@@ -78,7 +78,7 @@ func ResolvePaths(cfg config.Config) (ModelPaths, error) {
 		return ModelPaths{}, fmt.Errorf("resolve embed model: %w (run 'make setup' first)", err)
 	}
 
-	return ModelPaths{Vision: vision, Embed: embed}, nil
+	return ModelPaths{Vision: toModelFilePaths(vision), Embed: toModelFilePaths(embed)}, nil
 }
 
 // DownloadModels downloads vision and embedding models.
@@ -105,5 +105,12 @@ func DownloadModels(ctx context.Context, log logger.Logger, cfg config.Config) (
 		return ModelPaths{}, fmt.Errorf("embed download: %w", err)
 	}
 
-	return ModelPaths{Vision: vision, Embed: embed}, nil
+	return ModelPaths{Vision: toModelFilePaths(vision), Embed: toModelFilePaths(embed)}, nil
+}
+
+func toModelFilePaths(p models.Path) config.ModelFilePaths {
+	return config.ModelFilePaths{
+		ModelFiles: p.ModelFiles,
+		ProjFile:   p.ProjFile,
+	}
 }

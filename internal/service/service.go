@@ -9,8 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ardanlabs/kronk/sdk/tools/models"
-
 	"github.com/ramon-reichert/locallens/internal/platform/config"
 	"github.com/ramon-reichert/locallens/internal/platform/logger"
 	"github.com/ramon-reichert/locallens/internal/service/description"
@@ -35,8 +33,8 @@ type Service struct {
 // Config holds configuration for creating a Service.
 type Config struct {
 	Log         logger.Logger
-	VisionPaths models.Path
-	EmbedPaths  models.Path
+	VisionPaths config.ModelFilePaths
+	EmbedPaths  config.ModelFilePaths
 	AppCfg      config.Config
 }
 
