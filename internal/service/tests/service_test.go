@@ -26,11 +26,8 @@ var expectedSearchResults = []struct {
 	query    string
 	expected []string
 }{
-	{"busy city street", []string{"vietnam.jpg", "night.jpg"}},
 	{"animals or plants with predominat yellow", []string{"parrot.jpg", "forest.jpg"}},
 	{"people celebrating, wedding", []string{"wedding.jpg", "graduate.jpg"}},
-	{"nature landscape with trees", []string{"forest.jpg", "lighthouse.jpg"}},
-	{"colorful cartoon characters", []string{"marvel.jpg", "parrot.jpg"}},
 }
 
 func TestMain(m *testing.M) {

@@ -58,7 +58,7 @@ func TestResize_PreservesAspectRatio(t *testing.T) {
 }
 
 func TestResize_CustomMaxSide(t *testing.T) {
-	imgPath := filepath.Join(testdataDir, "vietnam.jpg")
+	imgPath := filepath.Join(testdataDir, "wedding.jpg")
 
 	maxSide := 128
 
