@@ -24,7 +24,7 @@ var (
 type Embedder struct {
 	log   logger.Logger
 	paths config.ModelFilePaths
-	cfg   config.Config
+	embed config.EmbedModelConfig
 
 	mu  sync.Mutex
 	krn *kronk.Kronk
@@ -32,9 +32,9 @@ type Embedder struct {
 
 // Config holds configuration for creating an Embedder.
 type Config struct {
-	Log    logger.Logger
-	Paths  config.ModelFilePaths
-	AppCfg config.Config
+	Log   logger.Logger
+	Paths config.ModelFilePaths
+	Embed config.EmbedModelConfig
 }
 
 // New creates an Embedder with the given configuration.
@@ -42,7 +42,7 @@ func New(cfg Config) *Embedder {
 	return &Embedder{
 		log:   cfg.Log,
 		paths: cfg.Paths,
-		cfg:   cfg.AppCfg,
+		embed: cfg.Embed,
 	}
 }
 
@@ -58,7 +58,7 @@ func (e *Embedder) Load(ctx context.Context) error {
 	start := time.Now()
 	e.log(ctx, "\n=============\nembedder load", "embedding model", e.paths.ModelFiles)
 
-	em := e.cfg.Embed
+	em := e.embed
 
 	fa := model.FlashAttentionDisabled
 	if em.FlashAttention {

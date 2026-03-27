@@ -30,9 +30,11 @@ type DescribeResult struct {
 
 // Describer manages the vision model for image description.
 type Describer struct {
-	log   logger.Logger
-	paths config.ModelFilePaths
-	cfg   config.Config
+	log     logger.Logger
+	paths   config.ModelFilePaths
+	vision  config.VisionModelConfig
+	prompt  config.VisionPrompt
+	maxSide int
 
 	mu  sync.Mutex
 	krn *kronk.Kronk
@@ -40,17 +42,21 @@ type Describer struct {
 
 // Config holds configuration for creating a Describer.
 type Config struct {
-	Log    logger.Logger
-	Paths  config.ModelFilePaths
-	AppCfg config.Config
+	Log     logger.Logger
+	Paths   config.ModelFilePaths
+	Vision  config.VisionModelConfig
+	Prompt  config.VisionPrompt
+	MaxSide int
 }
 
 // New creates a Describer with the given configuration.
 func New(cfg Config) *Describer {
 	return &Describer{
-		log:   cfg.Log,
-		paths: cfg.Paths,
-		cfg:   cfg.AppCfg,
+		log:     cfg.Log,
+		paths:   cfg.Paths,
+		vision:  cfg.Vision,
+		prompt:  cfg.Prompt,
+		maxSide: cfg.MaxSide,
 	}
 }
 
@@ -66,7 +72,7 @@ func (d *Describer) Load(ctx context.Context) error {
 	start := time.Now()
 	d.log(ctx, "describer load", "vision model", d.paths.ModelFiles)
 
-	v := d.cfg.Vision
+	v := d.vision
 
 	cfg := model.Config{
 		ModelFiles:    d.paths.ModelFiles,
@@ -125,8 +131,8 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (DescribeRes
 		return DescribeResult{}, ErrModelNotLoaded
 	}
 
-	p := d.cfg.Prompt
-	maxSide := d.cfg.Image.MaxSide
+	p := d.prompt
+	maxSide := d.maxSide
 
 	d.log(ctx, "\n=============\ndescribe image", "resize to", maxSide, "path", imagePath)
 

@@ -16,11 +16,12 @@
 
 # To-do:
 
-- Review where config.go should live
+- Review where config.go should live >> complete POD review
 - Add fixed llama.cpp version to config.go. Download latest if not fixed.
 - Maybe do the same to kronk version. (allow-update=false)
 - Vendor
 - Review pointer/value semantics and best pratices following Ardan Labs Conection new knowlodge
+- Create an Agents.md with general understanding about LocalLens codebase
 - Look for suggested model config values at the model provider sites;
 - Investigate the bug that sometimes happen after a good decription to all subsequent files to index:
  problably a problem with jinja/gonja templates >> amp threads continue T-019d1d8e-8897-719f-b6b1-01885c2ffb1b  
@@ -57,6 +58,10 @@ load_backend: loaded CPU backend from C:\Users\Usuario\.kronk\libraries\ggml-cpu
 
    Error: decode error: runtime error: slice bounds out of range [8388190:1]
    ```
+   Happened again at my desktop(CPU, 8GB RAM):
+   ```
+    error[chat: runtime error: slice bounds out of range [8386801:1]]
+  ```
 
 - Use grammar (Kronk)
 - See if model can use same image decoded to subsequent prompts;

@@ -43,14 +43,16 @@ func New(cfg Config) *Service {
 	return &Service{
 		log: cfg.Log,
 		describer: description.New(description.Config{
-			Log:    cfg.Log,
-			Paths:  cfg.VisionPaths,
-			AppCfg: cfg.AppCfg,
+			Log:     cfg.Log,
+			Paths:   cfg.VisionPaths,
+			Vision:  cfg.AppCfg.Vision,
+			Prompt:  cfg.AppCfg.Prompt,
+			MaxSide: cfg.AppCfg.Image.MaxSide,
 		}),
 		embedder: embedding.New(embedding.Config{
-			Log:    cfg.Log,
-			Paths:  cfg.EmbedPaths,
-			AppCfg: cfg.AppCfg,
+			Log:   cfg.Log,
+			Paths: cfg.EmbedPaths,
+			Embed: cfg.AppCfg.Embed,
 		}),
 	}
 }

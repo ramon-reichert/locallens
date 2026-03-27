@@ -14,35 +14,46 @@ import (
 	"sync"
 	"time"
 
-	kronksdk "github.com/ardanlabs/kronk/sdk/kronk"
-
-	"github.com/ramon-reichert/locallens/internal/platform/config"
-	"github.com/ramon-reichert/locallens/internal/platform/kronk"
 	"github.com/ramon-reichert/locallens/internal/platform/logger"
 	"github.com/ramon-reichert/locallens/internal/service"
 )
 
+// SetupStatusInfo holds the current setup state returned to the UI.
+type SetupStatusInfo struct {
+	Complete    bool   `json:"complete"`
+	BasePath    string `json:"basePath"`
+	DefaultPath string `json:"defaultPath"`
+}
+
+// SetupProgress reports a setup step to the caller.
+type SetupProgress func(step, status string)
+
+// Config holds dependencies for creating Handlers.
+type Config struct {
+	Log         logger.Logger
+	Service     *service.Service // nil if setup not yet complete.
+	SetupStatus func() SetupStatusInfo
+	SetupRunner func(ctx context.Context, log logger.Logger, basePath string, progress SetupProgress) (*service.Service, error)
+}
+
 // Handlers holds dependencies for all HTTP handlers.
 type Handlers struct {
-	log logger.Logger
+	log         logger.Logger
+	setupStatus func() SetupStatusInfo
+	setupRunner func(ctx context.Context, log logger.Logger, basePath string, progress SetupProgress) (*service.Service, error)
 
 	mu  sync.RWMutex
 	svc *service.Service
 }
 
-// New creates a Handlers. If config indicates setup is complete, it initializes
-// the service immediately.
-func New(log logger.Logger) *Handlers {
-	h := &Handlers{log: log}
-
-	cfg := config.Load()
-	if cfg.SetupComplete {
-		if err := h.initService(cfg); err != nil {
-			log(context.Background(), "service init failed, setup may be needed", "error", err)
-		}
+// New creates Handlers with the given dependencies.
+func New(cfg Config) *Handlers {
+	return &Handlers{
+		log:         cfg.Log,
+		svc:         cfg.Service,
+		setupStatus: cfg.SetupStatus,
+		setupRunner: cfg.SetupRunner,
 	}
-
-	return h
 }
 
 // Register registers all API routes and static file serving on the given mux.
@@ -68,26 +79,6 @@ func (h *Handlers) Close(ctx context.Context) {
 	if svc != nil {
 		svc.Close(ctx)
 	}
-}
-
-func (h *Handlers) initService(cfg config.Config) error {
-	paths, err := kronk.ResolvePaths(cfg)
-	if err != nil {
-		return err
-	}
-
-	svc := service.New(service.Config{
-		Log:         h.log,
-		VisionPaths: paths.Vision,
-		EmbedPaths:  paths.Embed,
-		AppCfg:      cfg,
-	})
-
-	h.mu.Lock()
-	h.svc = svc
-	h.mu.Unlock()
-
-	return nil
 }
 
 func (h *Handlers) requireService(w http.ResponseWriter) *service.Service {
@@ -258,17 +249,15 @@ func (h *Handlers) handleOpen(w http.ResponseWriter, r *http.Request) {
 // ---- Setup Handlers ----
 
 func (h *Handlers) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
-	cfg := config.Load()
+	info := h.setupStatus()
 
 	h.mu.RLock()
 	ready := h.svc != nil
 	h.mu.RUnlock()
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"complete":    cfg.SetupComplete && ready,
-		"basePath":    cfg.BasePath,
-		"defaultPath": config.DefaultBasePath(),
-	})
+	info.Complete = info.Complete && ready
+
+	writeJSON(w, http.StatusOK, info)
 }
 
 func (h *Handlers) handleSetupRun(w http.ResponseWriter, r *http.Request) {
@@ -299,41 +288,14 @@ func (h *Handlers) handleSetupRun(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 	}
 
-	ctx := r.Context()
-	log := h.log
-
-	cfg := config.Load()
-	cfg.BasePath = req.BasePath
-
-	send("libs", "downloading")
-	if err := kronk.InstallDependencies(ctx, log, cfg); err != nil {
-		send("libs", "error: "+err.Error())
-		return
-	}
-	send("libs", "complete")
-
-	send("models", "downloading")
-
-	if err := kronksdk.Init(); err != nil {
-		send("models", "error: "+err.Error())
-		return
-	}
-
-	_, err := kronk.DownloadModels(ctx, log, cfg)
+	svc, err := h.setupRunner(r.Context(), h.log, req.BasePath, send)
 	if err != nil {
-		send("models", "error: "+err.Error())
-		return
-	}
-	send("models", "complete")
-
-	send("init", "initializing")
-	if err := h.initService(cfg); err != nil {
-		send("init", "error: "+err.Error())
 		return
 	}
 
-	cfg.SetupComplete = true
-	config.Save(cfg)
+	h.mu.Lock()
+	h.svc = svc
+	h.mu.Unlock()
 
 	send("done", "complete")
 }

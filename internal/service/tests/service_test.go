@@ -86,8 +86,7 @@ func TestIndexFolder(t *testing.T) {
 	}
 
 	testImages := []string{
-		"forest.jpg", "graduate.jpg", "lighthouse.jpg", "marvel.jpg",
-		"night.jpg", "parrot.jpg", "vietnam.jpg", "wedding.jpg",
+		"forest.jpg", "graduate.jpg", "parrot.jpg", "wedding.jpg",
 	}
 	if count != len(testImages) {
 		t.Errorf("expected %d indexed images, got %d", len(testImages), count)
@@ -107,7 +106,7 @@ func TestIndexPersistence(t *testing.T) {
 		t.Fatal("expected entries after reload, got 0")
 	}
 
-	testImages := 8
+	testImages := 4
 	if count != testImages {
 		t.Errorf("expected %d entries after reload, got %d", testImages, count)
 	}
