@@ -38,7 +38,7 @@ func InstallDependencies(ctx context.Context, log logger.Logger, cfg config.Conf
 
 	log(ctx, "installing dependencies", "processor", processor)
 
-	opts := []libs.Option{libs.WithVersion(defaults.LibVersion(""))}
+	opts := []libs.Option{libs.WithVersion(defaults.LibVersion(cfg.LlamaCppVersion))}
 
 	if processor != "" {
 		p, err := defaults.Processor(processor)

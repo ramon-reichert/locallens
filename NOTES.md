@@ -16,9 +16,6 @@
 
 # To-do:
 
-- Review where config.go should live >> complete POD review
-- Add fixed llama.cpp version to config.go. Download latest if not fixed.
-- Maybe do the same to kronk version. (allow-update=false)
 - Vendor
 - Review pointer/value semantics and best pratices following Ardan Labs Conection new knowlodge
 - Create an Agents.md with general understanding about LocalLens codebase
