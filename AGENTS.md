@@ -87,6 +87,119 @@ make test-performance-similarity   # Embedding similarity quality tests
   and image sizes. Track TTFT, generation time, tokens/sec, memory pressure.
   A warmup inference runs before measurements to exclude model loading from TTFT.
 
+## Kronk SDK usage
+
+LocalLens is built on top of the [Kronk SDK](https://github.com/ardanlabs/kronk)
+(v1.21.4), which wraps llama.cpp via the yzma library using FFI (not cgo).
+LocalLens serves as a practical demonstration of Kronk's capabilities for
+local vision and embedding inference.
+
+### SDK packages used
+
+| Kronk package | Where used | Purpose |
+|---|---|---|
+| `sdk/kronk` | `description/`, `embedding/`, `cmd/` | `kronk.New(model.Config)` loads a model. `kronk.Init()` initializes the runtime. `krn.Unload(ctx)` frees it. |
+| `sdk/kronk/model` | `description/`, `embedding/`, perf tests | `model.Config` for engine params (ContextWindow, NBatch, CacheType). `model.D` for chat/embed request data. `model.GGMLType` for cache quantization. |
+| `sdk/tools/libs` | `kronk/` (platform) | `libs.New()` + `libs.Download()` to fetch llama.cpp shared libraries. `libs.WithVersion()` pins a specific build. |
+| `sdk/tools/models` | `kronk/` (platform) | `models.NewWithPaths()` + `models.Download()` / `models.FullPath()` to download and resolve GGUF model files. |
+| `sdk/tools/devices` | perf tests | `devices.List()` for GPU detection (name, type, VRAM, system RAM). |
+| `sdk/tools/defaults` | `kronk/` (platform) | `defaults.LibVersion()` resolves pinned vs latest llama.cpp version. `defaults.Processor()` parses GPU backend names. |
+
+### Chat (vision) API pattern
+
+```go
+// Build message list with image bytes and text prompts
+messages := []model.D{
+    {"role": "system", "content": systemPrompt},
+    {"role": "user", "content": imageBytes},    // []byte from image.Resize
+    {"role": "user", "content": userPrompt},
+}
+data := model.D{
+    "messages":    messages,
+    "temperature": temperature,
+    "max_tokens":  maxTokens,
+}
+resp, err := krn.Chat(ctx, data)
+
+// Check for decode errors (KV cache exhaustion, etc.)
+if resp.Choices[0].FinishReason() == model.FinishReasonError { ... }
+
+// Extract results
+description := resp.Choices[0].Message.Content
+ttft        := resp.Usage.TimeToFirstTokenMS
+tps         := resp.Usage.TokensPerSecond
+```
+
+### Embeddings API pattern
+
+```go
+data := model.D{
+    "input":    text,
+    "truncate": true,
+}
+resp, err := krn.Embeddings(ctx, data)
+vector := resp.Data[0].Embedding  // []float32
+```
+
+### Model lifecycle
+
+Models are loaded on demand and unloaded after each phase. This is critical
+for low-RAM machines where holding both vision (~935 MB) and embedding models
+simultaneously would cause memory pressure:
+
+```
+service.IndexFolder:
+  → describer.Load()     # Load vision model
+  → describe all images
+  → describer.Unload()   # Free vision model memory
+  → embedder.Load()      # Load embedding model
+  → embed all descriptions
+  → embedder.Unload()    # Free embedding model memory
+```
+
+### Hardware detection
+
+Performance tests use `devices.List()` to detect GPU availability and
+auto-select backends. The `KRONK_PROCESSOR` env var or `config.processor`
+field can override auto-detection (values: `cuda`, `vulkan`, `metal`, `cpu`).
+
+## Performance reference
+
+Benchmarked with Qwen2-VL-2B-Instruct (Q4_K_M) + Q8_0 mmproj, KV cache Q8_0,
+maxTokens=300, temperature=0.1, descriptive prompt.
+
+### Laptop — NVIDIA RTX 2060 (6 GB VRAM), 24 GB RAM
+
+```
+Config   | MaxSz | AvgTime(ms) | TTFT(ms) | OutTok | Tok/s
+---------+-------+-------------+----------+--------+------
+app      |    64 |        7574 |      182 |    252 |  56.0
+app      |   256 |        7231 |      223 |    176 |  36.6
+small    |    64 |        6194 |      137 |    196 |  56.1
+small    |   256 |        7934 |      235 |    205 |  36.2
+```
+
+Configs: app (ctx=8192, batch=2048/1024), small (ctx=2048, batch=1024/512).
+
+### Desktop — CPU only, 8 GB RAM
+
+```
+Config   | MaxSz | AvgTime(ms) | TTFT(ms) | OutTok | Tok/s
+---------+-------+-------------+----------+--------+------
+app      |    64 |       29887 |     1684 |    202 |  10.4
+app      |   256 |       23747 |     3333 |    180 |   9.8
+small    |    64 |       24481 |     1276 |    225 |  10.3
+small    |   256 |       24557 |     3156 |    183 |   9.1
+```
+
+Key observations:
+- GPU gives ~5× speedup in tokens/sec (56 vs 10 tok/s) and ~4× in wall time.
+- TTFT scales with image resolution (more pixels → more prefill tokens).
+- Output tokens are consistent (~180–250) regardless of hardware, confirming
+  descriptions are not truncated at these settings.
+- The `small` config (ctx=2048) performs comparably on CPU, suggesting context
+  window size has minimal impact on throughput for single-image inference.
+
 ## How the pipeline works
 
 ```
