@@ -16,9 +16,7 @@
 
 # To-do:
 
-- Vendor
 - Review pointer/value semantics and best pratices following Ardan Labs Conection new knowlodge
-- Create an Agents.md with general understanding about LocalLens codebase
 - Look for suggested model config values at the model provider sites;
 - Investigate the bug that sometimes happen after a good decription to all subsequent files to index:
  problably a problem with jinja/gonja templates >> amp threads continue T-019d1d8e-8897-719f-b6b1-01885c2ffb1b  
@@ -65,6 +63,7 @@ load_backend: loaded CPU backend from C:\Users\Usuario\.kronk\libraries\ggml-cpu
 - Adjust embedding flow to be more accurate;
 - Make performance tests for the embedding too;
 - Search for "TODO" along the codebase;
+- Vendor when reach stable version;
 
 # Issues
 
