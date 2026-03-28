@@ -34,7 +34,7 @@ var imageExts = map[string]bool{
 	".gif": true, ".webp": true, ".bmp": true,
 }
 
-func browse(path string, indexedPaths map[string]bool) (*BrowseResponse, error) {
+func browse(path string, indexedPaths map[string]bool) (BrowseResponse, error) {
 	if path == "" {
 		return listDrives()
 	}
@@ -43,7 +43,7 @@ func browse(path string, indexedPaths map[string]bool) (*BrowseResponse, error) 
 
 	entries, err := os.ReadDir(path)
 	if err != nil {
-		return nil, err
+		return BrowseResponse{}, err
 	}
 
 	resp := BrowseResponse{
@@ -86,11 +86,11 @@ func browse(path string, indexedPaths map[string]bool) (*BrowseResponse, error) 
 		return strings.ToLower(resp.Images[i].Name) < strings.ToLower(resp.Images[j].Name)
 	})
 
-	return &resp, nil
+	return resp, nil
 }
 
-func listDrives() (*BrowseResponse, error) {
-	resp := &BrowseResponse{Current: ""}
+func listDrives() (BrowseResponse, error) {
+	resp := BrowseResponse{Current: ""}
 
 	if runtime.GOOS != "windows" {
 		resp.Folders = []FolderEntry{{Name: "/", Path: "/"}}
