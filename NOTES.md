@@ -18,52 +18,14 @@
 
 - Review pointer/value semantics and best pratices following Ardan Labs Conection new knowlodge
 - Look for suggested model config values at the model provider sites;
-- Investigate the bug that sometimes happen after a good decription to all subsequent files to index:
- problably a problem with jinja/gonja templates >> amp threads continue T-019d1d8e-8897-719f-b6b1-01885c2ffb1b  
-```
-$ make test-performance-vision
-CGO_ENABLED=0 go test -timeout 60m -v -run TestVisionPerformance ./internal/service/tests/performance/...
-=== RUN   TestVisionPerformance
-ggml_cuda_init: found 1 CUDA devices (Total VRAM: 6143 MiB):
-  Device 0: NVIDIA GeForce RTX 2060, compute capability 7.5, VMM: yes, VRAM: 6143 MiB
-load_backend: loaded CUDA backend from C:\Users\Usuario\.kronk\libraries\ggml-cuda.dll
-load_backend: loaded RPC backend from C:\Users\Usuario\.kronk\libraries\ggml-rpc.dll
-load_backend: loaded CPU backend from C:\Users\Usuario\.kronk\libraries\ggml-cpu-haswell.dll
-====================================================================================================
-
-    === Config: app (ctx=8192, Nbatch=2048, NUbatch=1024) | maxTok=300, temp=0.1 | 1 reps ===
-
-    Model: Qwen2-VL-2B-Instruct-Q4_K_M | Type: dense | VRAM: 934.7 MB | KV Slots: 0.0 MB
-
-=> Run 1: forest.jpg | maxSize=128 | Config: app (ctx=8192, Nbatch=2048, NUbatch=1024) | maxTok=300, temp=0.1
-   Timing:  total=5988ms | ttft=361ms | gen=5627ms
-   Tokens:  in=73 out=127 (reason=0 compl=127) | Tok/s=26.1
-   Memory:  avlbRAM=22474MB pgFaults=81426
-   Description: The image depicts a serene forest scene, characterized by a dense canopy of trees. The trees are tall and slender, with their trunks reaching upwards into the sky. The leaves are a mix of green hues, indicating a healthy, thriving forest. The sunlight filters through the leaves, creating a dappled pattern on the forest floor. The ground is covered with a layer of fallen leaves and twigs, adding to the natural, untouched feel of the forest. The overall atmosphere is calm and peaceful, with no visible signs of human activity or modern structures. The background is filled with more trees, creating a dense, lush forest environment.
-
-
-     >>>> forest.jpg: maxSize=128 config=app || avgTime=5988ms | avgTTFT=361ms | timeVar=0% | 1/1 success
-
-
-=> Run 1: graduate.jpg | maxSize=128 | Config: app (ctx=8192, Nbatch=2048, NUbatch=1024) | maxTok=300, temp=0.1
-   Timing:  total=818ms | ttft=0ms | gen=818ms
-   Tokens:  in=0 out=0 (reason=0 compl=0) | Tok/s=0.0
-   Memory:  avlbRAM=22341MB pgFaults=10581 | FLAGS: [LowOutTok] [DECODE:-99-runtime error: slice bounds out of range [8388190:1]]
-   Description:
-
-   Error: decode error: runtime error: slice bounds out of range [8388190:1]
-   ```
-   Happened again at my desktop(CPU, 8GB RAM):
-   ```
-    error[chat: runtime error: slice bounds out of range [8386801:1]]
-  ```
-
 - Use grammar (Kronk)
 - See if model can use same image decoded to subsequent prompts;
 - Adjust embedding flow to be more accurate;
 - Make performance tests for the embedding too;
 - Search for "TODO" along the codebase;
+- The bug that sometimes happened after a good decription to all subsequent files to index seems (amp threads continue T-019d7a19-2953-74c6-8018-9a6afe182c2a) to be solved by addinng a corrected version of package gonja to platform/ and redirecting go.mod to use it. It could be reported upstream and, if corrected, the replacing could be removed. Kronk will be vendored after MVP, anyway.
 - Vendor when reach stable version;
+
 
 # Issues
 
@@ -99,7 +61,7 @@ load_backend: loaded CPU backend from C:\Users\Usuario\.kronk\libraries\ggml-cpu
 - The model size itself and its quantization value, as the projection file attached, impacts the hardware demand. Current using small ones, with good behavior of descriptions achieved. Can try even smaller configs later.
 - I assumed KV cache precision should track model weight precision — it doesn't. They're independent. The K cache holds attention keys that get multiplied against every query head in the group; with Qwen2-VL's 7:1 GQA ratio, Q4_0 quantization noise in the K cache gets amplified across all 7 sharing heads, destroying attention patterns. Q8_0 is the minimum safe level for K cache, especially on small Qwen models. V cache is more tolerant (could even go Q4_0), but Q8_0/Q8_0 is the pragmatic safe default.
 
-- Not using GPUs for now. Can dig it further later. Its solved, since the machine has a GPU!
+- Kronk now has auto-detect GPU. If the machine has a GPU, kronk will use it automatically. BUT, if a machine has only an older iGPU and low memory (< 16GB), to use the auto-selected Vulkan backend is worse than use CPU-only as processor. So in this case is better set the env KRONK_PROCESSOR=cpu; Maybe we can set some threshold values to choose Vulkan rather than CPU.
 
 - Tokens/sec seems not to be related with config or image size. It remains aprox. 14-15 tok/s. Maybe it is related just with hardware? No, it varies across same hardware runs, maybe related with memory demand on the hardware at inference time.
 
@@ -111,6 +73,145 @@ load_backend: loaded CPU backend from C:\Users\Usuario\.kronk\libraries\ggml-cpu
 
 ### Some performance test outputs:
 more recents at top
+
+
+
+====================================================================================================
+HARDWARE
+====================================================================================================
+GPU:         none
+System RAM:  4174 MB
+GPU Offload: true
+
+====================================================================================================
+CONFIGS
+====================================================================================================
+Model:       Qwen2-VL-2B-Instruct-Q4_K_M.gguf
+MMProj:      mmproj-Qwen2-VL-2B-Instruct-Q4_K_M.gguf
+MaxSizes:    [64 256]
+MaxTokens:   300
+Temperature: 0.1
+
+Prompt: You extract image keywords for semantic search.
+
+Describe this image in detail. Include: objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.
+
+
+Name       | CtxWin | NBatch | NUBatch |   CacheK |   CacheV |   VRAM(MB) | KVSlot(MB) | RAM Use%
+----------------------------------------------------------------------------------------------------
+app        |   8192 |   2048 |    1024 |     Q8_0 |     Q8_0 |      934.7 |      112.0 |    22.4%
+
+====================================================================================================
+SUMMARY BY CONFIG + MAXSIZE
+====================================================================================================
+app      @ 64: avgTime  26000ms | ttft   1388ms | avgTimeVar  27% | inTok   70 | outTok 238 | Tok/s 10.3
+app      @256: avgTime  20186ms | ttft   3176ms | avgTimeVar  32% | inTok  110 | outTok 156 | Tok/s  9.6
+====================================================================================================
+
+==================================================================================================================================
+GROUPED RESULTS
+==================================================================================================================================
+Config   |  Max | Image           | AvgTime(ms) |  TTFT(ms) |   GenTime | TimeVar% |  InTok | OutTok | Tok/s |  Succ | Pressure
+----------------------------------------------------------------------------------------------------------------------------------
+app      |   64 | forest.jpg      |       34072 |      1597 |     32475 |       0% |     70 |    292 |   9.2 |  100% |   1 runs
+app      |   64 | graduate.jpg    |       23173 |      1495 |     21678 |       0% |     70 |    203 |   9.7 |  100% |   1 runs
+app      |   64 | parrot.jpg      |       28945 |      1229 |     27716 |       0% |     70 |    253 |   9.4 |  100% |   1 runs
+app      |   64 | wedding.jpg     |       17809 |      1230 |     16579 |       0% |     70 |    205 |  13.0 |  100% |   0 runs
+app      |  256 | forest.jpg      |       15726 |      2749 |     12977 |       0% |    103 |    118 |   9.7 |  100% |   1 runs
+app      |  256 | graduate.jpg    |       15153 |      3043 |     12110 |       0% |    112 |    108 |   9.5 |  100% |   1 runs
+app      |  256 | parrot.jpg      |       20749 |      3762 |     16987 |       0% |    112 |    151 |   9.3 |  100% |   1 runs
+app      |  256 | wedding.jpg     |       29117 |      3150 |     25967 |       0% |    112 |    247 |   9.8 |  100% |   1 runs
+
+====================================================================================================
+MEMORY PRESSURE SUMMARY
+====================================================================================================
+Total runs:           8
+Runs with pressure:   7 (87.5%)
+  - Slow token:       7
+  - High page faults: 0
+  - Low RAM:          0
+  - Truncated output: 0
+Min available RAM:    2166 MB
+Max page faults:      180652
+====================================================================================================
+
+Grouped results saved to: results\vision\performVis_grp_20260401_225032.csv
+Individual results saved to: results\vision\performVis_ind_20260401_225032.csv
+--- PASS: TestVisionPerformance (195.87s)
+PASS
+ok      github.com/ramon-reichert/locallens/internal/service/tests/performance  196.082s
+
+
+
+
+====================================================================================================
+HARDWARE
+====================================================================================================
+GPU:         Vulkan0 (gpu_vulkan) | 4061 MB total | 3655 MB free
+System RAM:  4188 MB
+GPU Offload: true
+
+====================================================================================================
+CONFIGS
+====================================================================================================
+Model:       Qwen2-VL-2B-Instruct-Q4_K_M.gguf
+MMProj:      mmproj-Qwen2-VL-2B-Instruct-Q4_K_M.gguf
+MaxSizes:    [64 256]
+MaxTokens:   300
+Temperature: 0.1
+
+Prompt: You extract image keywords for semantic search.
+
+Describe this image in detail. Include: objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.
+
+
+Name       | CtxWin | NBatch | NUBatch |   CacheK |   CacheV |   VRAM(MB) | KVSlot(MB) | GPU Use%
+----------------------------------------------------------------------------------------------------
+app        |   8192 |   2048 |    1024 |     Q8_0 |     Q8_0 |      934.7 |      112.0 |    23.0%
+
+====================================================================================================
+SUMMARY BY CONFIG + MAXSIZE
+====================================================================================================
+app      @ 64: avgTime  39498ms | ttft   7129ms | avgTimeVar  32% | inTok   70 | outTok 208 | Tok/s  7.0
+app      @256: avgTime  36827ms | ttft  10002ms | avgTimeVar  28% | inTok  110 | outTok 193 | Tok/s  7.4
+====================================================================================================
+
+==================================================================================================================================
+GROUPED RESULTS
+==================================================================================================================================
+Config   |  Max | Image           | AvgTime(ms) |  TTFT(ms) |   GenTime | TimeVar% |  InTok | OutTok | Tok/s |  Succ | Pressure
+----------------------------------------------------------------------------------------------------------------------------------
+app      |   64 | forest.jpg      |       56629 |      7185 |     49444 |       0% |     70 |    296 |   6.8 |  100% |   1 runs
+app      |   64 | graduate.jpg    |       32588 |      7150 |     25438 |       0% |     70 |    171 |   7.1 |  100% |   1 runs
+app      |   64 | parrot.jpg      |       27391 |      7092 |     20299 |       0% |     70 |    133 |   6.9 |  100% |   1 runs
+app      |   64 | wedding.jpg     |       41386 |      7088 |     34298 |       0% |     70 |    232 |   7.0 |  100% |   1 runs
+app      |  256 | forest.jpg      |       39957 |      9250 |     30707 |       0% |    103 |    260 |   8.8 |  100% |   1 runs
+app      |  256 | graduate.jpg    |       27409 |     10256 |     17153 |       0% |    112 |    113 |   7.0 |  100% |   1 runs
+app      |  256 | parrot.jpg      |       49799 |     10239 |     39560 |       0% |    112 |    270 |   7.0 |  100% |   1 runs
+app      |  256 | wedding.jpg     |       30142 |     10265 |     19877 |       0% |    112 |    129 |   6.9 |  100% |   1 runs
+
+====================================================================================================
+MEMORY PRESSURE SUMMARY
+====================================================================================================
+Total runs:           8
+Runs with pressure:   8 (100.0%)
+  - Slow token:       8
+  - High page faults: 0
+  - Low RAM:          0
+  - Truncated output: 0
+Min available RAM:    1369 MB
+Max page faults:      255894
+====================================================================================================
+
+Grouped results saved to: results\vision\performVis_grp_20260401_223309.csv
+Individual results saved to: results\vision\performVis_ind_20260401_223309.csv
+--- PASS: TestVisionPerformance (332.05s)
+PASS
+ok      github.com/ramon-reichert/locallens/internal/service/tests/performance  332.380s
+
+
+
+
 
 ====================================================================================================
 HARDWARE
