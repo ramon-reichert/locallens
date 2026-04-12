@@ -321,7 +321,7 @@ func findImages(folderPath string, recursive bool) ([]string, error) {
 		return images, nil
 	}
 
-	err := filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error { // TODO: review that code and app behavior on recursiveness.
 		if err != nil {
 			return err
 		}

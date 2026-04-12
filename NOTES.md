@@ -17,6 +17,8 @@
 # To-do:
 
 - Review pointer/value semantics and best pratices following Ardan Labs Conection new knowlodge
+- Rethink the service flow according to the plan saved in agents.md under indexFolder durability and progress
+- Think of make LocalLens service logic private and make the part related to Kronk public;
 - Look for suggested model config values at the model provider sites;
 - Use grammar (Kronk)
 - See if model can use same image decoded to subsequent prompts;
@@ -25,6 +27,8 @@
 - Search for "TODO" along the codebase;
 - The bug that sometimes happened after a good decription to all subsequent files to index seems (amp threads continue T-019d7a19-2953-74c6-8018-9a6afe182c2a) to be solved by addinng a corrected version of package gonja to platform/ and redirecting go.mod to use it. It could be reported upstream and, if corrected, the replacing could be removed. Kronk will be vendored after MVP, anyway.
 - Vendor when reach stable version;
+- Add some config values to the setup panel and make them configurable through the app;
+- Review and correct indexing/searching recursiveness code; Add recursiveness test too;
 
 
 # Issues
