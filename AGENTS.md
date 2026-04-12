@@ -159,7 +159,7 @@ service.IndexFolder:
 
 ### Hardware detection
 
-Performance tests use `devices.List()` to detect GPU availability and
+Performance tests use `devices.DetectGPU()` to detect GPU availability and
 auto-select backends. The `KRONK_PROCESSOR` env var or `config.processor`
 field can override auto-detection (values: `cuda`, `vulkan`, `metal`, `cpu`).
 

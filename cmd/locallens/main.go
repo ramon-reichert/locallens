@@ -36,15 +36,16 @@ func run() error {
 
 	cfg := config.Load()
 
-	// Try to initialize the service if setup was already completed.
+	// Initialize the Kronk SDK runtime, then try to create the service.
+	// If models aren't downloaded yet, this fails gracefully and the
+	// handler layer returns 503 until setup completes.
 	var svc *service.Service
-	if cfg.SetupComplete {
-		s, err := initService(log, cfg)
-		if err != nil {
-			log(ctx, "service init failed, setup may be needed", "error", err)
-		} else {
-			svc = s
-		}
+	if err := kronksdk.Init(); err != nil {
+		log(ctx, "kronk init failed, setup may be needed", "error", err)
+	} else if s, err := initService(log, cfg); err != nil {
+		log(ctx, "service init deferred, setup may be needed", "error", err)
+	} else {
+		svc = s
 	}
 
 	handlers := app.New(app.Config{
@@ -53,7 +54,6 @@ func run() error {
 		SetupStatus: func() app.SetupStatusInfo {
 			c := config.Load()
 			return app.SetupStatusInfo{
-				Complete:    c.SetupComplete,
 				BasePath:    c.BasePath,
 				DefaultPath: config.DefaultBasePath(),
 			}
@@ -87,7 +87,6 @@ func run() error {
 				return nil, err
 			}
 
-			cfg.SetupComplete = true
 			config.Save(cfg)
 
 			return svc, nil

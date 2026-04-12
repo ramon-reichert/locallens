@@ -302,6 +302,21 @@ button:disabled {
     background: none;
 }
 
+#setup-badge {
+    font-size: 10px;
+    position: relative;
+    top: -6px;
+    margin-left: -2px;
+}
+
+#setup-badge.ready {
+    color: #44cc66;
+}
+
+#setup-badge.needed {
+    color: #ee4444;
+}
+
 /* Modal */
 
 .modal {

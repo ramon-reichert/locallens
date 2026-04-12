@@ -20,7 +20,6 @@ import (
 
 // SetupStatusInfo holds the current setup state returned to the UI.
 type SetupStatusInfo struct {
-	Complete    bool   `json:"complete"`
 	BasePath    string `json:"basePath"`
 	DefaultPath string `json:"defaultPath"`
 }
@@ -255,9 +254,13 @@ func (h *Handlers) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 	ready := h.svc != nil
 	h.mu.RUnlock()
 
-	info.Complete = info.Complete && ready
-
-	writeJSON(w, http.StatusOK, info)
+	writeJSON(w, http.StatusOK, struct {
+		Complete bool   `json:"complete"`
+		SetupStatusInfo
+	}{
+		Complete:        ready,
+		SetupStatusInfo: info,
+	})
 }
 
 func (h *Handlers) handleSetupRun(w http.ResponseWriter, r *http.Request) {

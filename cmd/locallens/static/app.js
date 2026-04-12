@@ -26,6 +26,7 @@ const fileList = document.getElementById("file-list");
 
 // Setup elements
 const setupBtn = document.getElementById("setup-btn");
+const setupBadge = document.getElementById("setup-badge");
 const setupModal = document.getElementById("setup-modal");
 const setupWarning = document.getElementById("setup-warning");
 const setupPath = document.getElementById("setup-path");
@@ -73,6 +74,7 @@ async function checkSetupStatus() {
         const data = await res.json();
         state.setupComplete = data.complete;
         setupPath.value = data.basePath || data.defaultPath || "";
+        updateSetupBadge();
 
         if (!data.complete) {
             openSetup(false);
@@ -80,10 +82,27 @@ async function checkSetupStatus() {
     } catch {}
 }
 
+function updateSetupBadge() {
+    if (state.setupComplete) {
+        setupBadge.textContent = "\u2713";
+        setupBadge.className = "ready";
+    } else {
+        setupBadge.textContent = "\u2717";
+        setupBadge.className = "needed";
+    }
+}
+
 function openSetup(showWarning) {
     setupWarning.classList.toggle("hidden", !showWarning);
-    setupProgress.classList.add("hidden");
     setupDownloadBtn.disabled = false;
+
+    if (state.setupComplete) {
+        setupProgressText.textContent = "Setup complete. You can close this panel.";
+        setupProgress.classList.remove("hidden");
+    } else {
+        setupProgress.classList.add("hidden");
+    }
+
     setupModal.classList.remove("hidden");
 }
 
@@ -152,6 +171,7 @@ function handleSetupEvent(event) {
     if (event.status === "complete" && event.step === "done") {
         setupProgressText.textContent = "Setup complete. You can close this panel.";
         state.setupComplete = true;
+        updateSetupBadge();
         return;
     }
 

@@ -83,9 +83,8 @@ type ImageConfig struct {
 
 // Config holds the full application configuration.
 type Config struct {
-	BasePath       string            `json:"basePath"`
-	SetupComplete  bool              `json:"setupComplete"` // TODO: should it be here?
-	Processor      string            `json:"processor"`
+	BasePath        string            `json:"basePath"`
+	Processor       string            `json:"processor"`
 	LlamaCppVersion string           `json:"llamaCppVersion"`
 	Models         Models            `json:"models"`
 	Vision        VisionModelConfig `json:"visionModel"`
