@@ -232,7 +232,7 @@ loaded for the lifetime of the `Service`. Search is the primary use case of
 the app and may run many times per session; each Search needs the embedder to
 vectorize the query. Keeping it always loaded avoids repeated load/unload
 costs for every search. As a secondary benefit, it enables per-image
-embed-after-describe during indexing (Step 3).
+embed-after-describe during indexing (Step 4).
 
 **Changes:**
 - `Service.New()`: call `embedder.Load()` at construction time.
@@ -240,7 +240,29 @@ embed-after-describe during indexing (Step 3).
 - Remove `embedder.Load()`/`Unload()` calls from `IndexFolder` and `Search`.
 - Remove the `IsLoaded()` guard in `Search` — it's always loaded.
 
-### Step 2 — Bound IndexFolder to a single folder
+### Step 2 — Cache loaded indexes in memory
+
+Currently `Search` re-reads every `.locallens.index` file from disk on every
+call, deserializes all entries, runs cosine similarity, then discards
+everything. With the embedder always loaded (Step 1), the remaining cost per
+search is disk I/O — eliminate it with an in-memory cache.
+
+**Changes:**
+- Add a `map[string]*index.Index` field to `Service` (protected by the
+  existing mutex pattern or a dedicated `sync.RWMutex`).
+- On first search of a folder, load from disk and cache. Subsequent searches
+  read directly from memory.
+- When `IndexFolder` saves an index, update the cache for that folder (the
+  Service already knows — it calls `idx.Save()`).
+- Memory cost is negligible: each entry is a path + description + `[]float32`
+  embedding (~1-2 KB per image). 10,000 images ≈ ~15-20 MB, small next to the
+  320 MB embedder already in memory.
+
+After Steps 1-2, Search becomes: embed query (one model call) → cosine
+similarity over cached vectors → return results. No disk I/O for repeat
+searches.
+
+### Step 3 — Bound IndexFolder to a single folder
 
 Currently `IndexFolder` handles recursion internally, grouping images by folder.
 Move the recursive walk up to the caller (handler layer) so each `IndexFolder`
@@ -258,9 +280,9 @@ unit of work.
 - Each per-folder call loads one index, processes images, saves, and returns —
   crash-safe at folder granularity.
 
-### Step 3 — Save index after each image
+### Step 4 — Save index after each image
 
-With the embedder always loaded (Step 1) and single-folder scope (Step 2),
+With the embedder always loaded (Step 1) and single-folder scope (Step 3),
 the describe→embed→save cycle can run per image instead of per batch.
 
 **Changes:**
@@ -275,9 +297,9 @@ the describe→embed→save cycle can run per image instead of per batch.
 - If the app crashes after image N, images 1..N are persisted. On restart,
   the existing-entry skip logic (`indexes[dir].Get(imgPath)`) resumes from N+1.
 
-### Step 4 — Metrics, ETA, and cancellation
+### Step 5 — Metrics, ETA, and cancellation
 
-With per-image granularity (Step 3), add progress reporting and cancellation.
+With per-image granularity (Step 4), add progress reporting and cancellation.
 
 **Metrics and ETA:**
 - Collect TTFT, tok/s, and embed time per image as today, but compute a
@@ -290,7 +312,7 @@ With per-image granularity (Step 3), add progress reporting and cancellation.
 
 **Cancellation:**
 - Check `ctx.Done()` at the top of each image iteration. If cancelled, save
-  the index (already saved per-image from Step 3) and return early with the
+  the index (already saved per-image from Step 4) and return early with the
   count of images processed so far.
 - The handler layer wires a cancellable context to an API endpoint (e.g.,
   `POST /api/index/cancel`) or ties it to the SSE connection closing.
@@ -303,7 +325,7 @@ With per-image granularity (Step 3), add progress reporting and cancellation.
   per `IndexFolder` call. Do not keep it loaded across calls.
 - **Index format**: No schema changes needed. `index.Entry` already has
   `Description` and `Embedding` fields. Partial entries (description without
-  embedding) are not stored — Step 3 ensures both are present before saving.
+  embedding) are not stored — Step 4 ensures both are present before saving.
 - **No image file modification**: Descriptions live only in the per-folder
   `.locallens.index` file. Do not write metadata to image files or create
   sidecar files.

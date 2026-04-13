@@ -18,7 +18,6 @@ import (
 
 var (
 	ErrModelNotLoaded = errors.New("vision model not loaded")
-	ErrEmptyImage     = errors.New("empty image data")
 )
 
 // DescribeResult holds the output of a Describe call.
@@ -115,7 +114,7 @@ func (d *Describer) Unload(ctx context.Context) error {
 }
 
 // IsLoaded returns true if the vision model is loaded.
-func (d *Describer) IsLoaded() bool {
+func (d *Describer) IsLoaded() bool { // TODO: Add an idle timer to the models. Than this function can be usefull. The same for the Embedder ones.
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.krn != nil

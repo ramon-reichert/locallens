@@ -16,9 +16,11 @@
 
 # To-do:
 
-- Review pointer/value semantics and best pratices following Ardan Labs Conection new knowlodge
+- Review pointer/value semantics and best pratices following Ardan Labs Conection new knowlodge.
+  Reviewed: service.go, description.go, embedding.go
 - Rethink the service flow according to the plan saved in agents.md under indexFolder durability and progress
 - Think of make LocalLens service logic private and make the part related to Kronk public;
+- See if the vision model can get benefit from FlashAtention;
 - Look for suggested model config values at the model provider sites;
 - Use grammar (Kronk)
 - See if model can use same image decoded to subsequent prompts;
