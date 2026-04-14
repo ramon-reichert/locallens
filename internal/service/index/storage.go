@@ -8,8 +8,8 @@ import (
 
 // Save writes the index to disk using gob encoding.
 func (idx *Index) Save() error {
-	idx.mu.RLock()
-	defer idx.mu.RUnlock()
+	idx.mu.Lock()
+	defer idx.mu.Unlock()
 
 	f, err := os.Create(idx.indexPath)
 	if err != nil {

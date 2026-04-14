@@ -14,7 +14,7 @@ type Entry struct {
 
 // Index stores image embeddings.
 type Index struct {
-	mu        sync.RWMutex
+	mu        sync.Mutex
 	entries   map[string]Entry // key: image path
 	indexPath string
 }
@@ -37,8 +37,8 @@ func (idx *Index) Add(entry Entry) {
 
 // Get retrieves an entry by path.
 func (idx *Index) Get(path string) (Entry, bool) {
-	idx.mu.RLock()
-	defer idx.mu.RUnlock()
+	idx.mu.Lock()
+	defer idx.mu.Unlock()
 
 	entry, ok := idx.entries[path]
 	return entry, ok
@@ -54,16 +54,16 @@ func (idx *Index) Remove(path string) {
 
 // Len returns the number of entries in the index.
 func (idx *Index) Len() int {
-	idx.mu.RLock()
-	defer idx.mu.RUnlock()
+	idx.mu.Lock()
+	defer idx.mu.Unlock()
 
 	return len(idx.entries)
 }
 
 // All returns all entries as a slice for searching.
 func (idx *Index) All() []Entry {
-	idx.mu.RLock()
-	defer idx.mu.RUnlock()
+	idx.mu.Lock()
+	defer idx.mu.Unlock()
 
 	entries := make([]Entry, 0, len(idx.entries))
 	for _, entry := range idx.entries {
