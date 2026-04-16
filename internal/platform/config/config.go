@@ -85,12 +85,12 @@ type ImageConfig struct {
 type Config struct {
 	BasePath        string            `json:"basePath"`
 	Processor       string            `json:"processor"`
-	LlamaCppVersion string           `json:"llamaCppVersion"`
-	Models         Models            `json:"models"`
-	Vision        VisionModelConfig `json:"visionModel"`
-	Embed         EmbedModelConfig  `json:"embedModel"`
-	Prompt        VisionPrompt      `json:"prompt"`
-	Image         ImageConfig       `json:"image"`
+	LlamaCppVersion string            `json:"llamaCppVersion"`
+	ModelsURLs      Models            `json:"models"`
+	Vision          VisionModelConfig `json:"visionModel"`
+	Embed           EmbedModelConfig  `json:"embedModel"`
+	Prompt          VisionPrompt      `json:"prompt"`
+	Image           ImageConfig       `json:"image"`
 }
 
 // ModelFilePaths holds resolved file system paths for a single model.
@@ -113,7 +113,7 @@ func DefaultBasePath() string {
 func Defaults() Config {
 	return Config{
 		BasePath: DefaultBasePath(),
-		Models: Models{
+		ModelsURLs: Models{
 			VisionModelURL: "https://huggingface.co/ggml-org/Qwen2-VL-2B-Instruct-GGUF/resolve/main/Qwen2-VL-2B-Instruct-Q4_K_M.gguf",
 			VisionProjURL:  "https://huggingface.co/ggml-org/Qwen2-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen2-VL-2B-Instruct-Q8_0.gguf",
 			EmbedModelURL:  "https://huggingface.co/ggml-org/embeddinggemma-300m-qat-q8_0-GGUF/resolve/main/embeddinggemma-300m-qat-Q8_0.gguf",

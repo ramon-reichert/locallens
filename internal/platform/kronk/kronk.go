@@ -61,21 +61,21 @@ func InstallDependencies(ctx context.Context, log logger.Logger, cfg config.Conf
 }
 
 // ResolvePaths resolves the file paths for already-downloaded models.
-// Models must be downloaded first via `make setup`.
+// Models must be downloaded first.
 func ResolvePaths(cfg config.Config) (ModelPaths, error) {
 	mdls, err := models.NewWithPaths(cfg.BasePath)
 	if err != nil {
 		return ModelPaths{}, fmt.Errorf("models new: %w", err)
 	}
 
-	vision, err := mdls.FullPath(cfg.Models.VisionModelID())
+	vision, err := mdls.FullPath(cfg.ModelsURLs.VisionModelID())
 	if err != nil {
-		return ModelPaths{}, fmt.Errorf("resolve vision model: %w (run 'make setup' first)", err)
+		return ModelPaths{}, fmt.Errorf("resolve vision model: %w", err)
 	}
 
-	embed, err := mdls.FullPath(cfg.Models.EmbedModelID())
+	embed, err := mdls.FullPath(cfg.ModelsURLs.EmbedModelID())
 	if err != nil {
-		return ModelPaths{}, fmt.Errorf("resolve embed model: %w (run 'make setup' first)", err)
+		return ModelPaths{}, fmt.Errorf("resolve embed model: %w", err)
 	}
 
 	return ModelPaths{Vision: toModelFilePaths(vision), Embed: toModelFilePaths(embed)}, nil
@@ -94,13 +94,13 @@ func DownloadModels(ctx context.Context, log logger.Logger, cfg config.Config) (
 	}
 
 	log(ctx, "downloading vision model")
-	vision, err := mdls.Download(ctx, kronk.FmtLogger, cfg.Models.VisionModelURL, cfg.Models.VisionProjURL)
+	vision, err := mdls.Download(ctx, kronk.FmtLogger, cfg.ModelsURLs.VisionModelURL, cfg.ModelsURLs.VisionProjURL)
 	if err != nil {
 		return ModelPaths{}, fmt.Errorf("vision download: %w", err)
 	}
 
 	log(ctx, "downloading embedding model")
-	embed, err := mdls.Download(ctx, kronk.FmtLogger, cfg.Models.EmbedModelURL, "")
+	embed, err := mdls.Download(ctx, kronk.FmtLogger, cfg.ModelsURLs.EmbedModelURL, "")
 	if err != nil {
 		return ModelPaths{}, fmt.Errorf("embed download: %w", err)
 	}
