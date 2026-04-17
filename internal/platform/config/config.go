@@ -3,6 +3,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -147,17 +148,21 @@ func Defaults() Config {
 }
 
 // Load reads the config from disk. Starts with defaults, then applies any
-// JSON overrides found in the config file.
-func Load() Config {
+// JSON overrides found in the config file. Returns an error if the config
+// file exists but contains invalid JSON.
+func Load() (Config, error) {
 	cfg := Defaults()
 
 	data, err := os.ReadFile(configPath())
 	if err != nil {
-		return cfg
+		return cfg, nil
 	}
 
-	json.Unmarshal(data, &cfg)
-	return cfg
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return cfg, fmt.Errorf("parse config %s: %w", configPath(), err)
+	}
+
+	return cfg, nil
 }
 
 // Save writes the config to disk.

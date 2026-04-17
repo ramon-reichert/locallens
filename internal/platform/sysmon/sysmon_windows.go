@@ -1,5 +1,6 @@
 //go:build windows
 
+// Package sysmon provides tools to fetch system info for the performance tests.
 package sysmon
 
 import (
@@ -8,11 +9,11 @@ import (
 )
 
 var (
-	kernel32              = syscall.NewLazyDLL("kernel32.dll")
-	psapi                 = syscall.NewLazyDLL("psapi.dll")
-	globalMemoryStatusEx  = kernel32.NewProc("GlobalMemoryStatusEx")
-	getProcessMemoryInfo  = psapi.NewProc("GetProcessMemoryInfo")
-	getCurrentProcess     = kernel32.NewProc("GetCurrentProcess")
+	kernel32             = syscall.NewLazyDLL("kernel32.dll")
+	psapi                = syscall.NewLazyDLL("psapi.dll")
+	globalMemoryStatusEx = kernel32.NewProc("GlobalMemoryStatusEx")
+	getProcessMemoryInfo = psapi.NewProc("GetProcessMemoryInfo")
+	getCurrentProcess    = kernel32.NewProc("GetCurrentProcess")
 )
 
 type memoryStatusEx struct {
@@ -42,8 +43,8 @@ type processMemoryCounters struct {
 
 // Snapshot holds system memory metrics at a point in time.
 type Snapshot struct {
-	AvailableRAM_MB uint64
-	PageFaults      uint64
+	AvailableRAMinMB uint64
+	PageFaults       uint64
 }
 
 // Capture takes a snapshot of current system memory state.
@@ -55,7 +56,7 @@ func Capture() Snapshot {
 	memStatus.Length = uint32(unsafe.Sizeof(memStatus))
 	ret, _, _ := globalMemoryStatusEx.Call(uintptr(unsafe.Pointer(&memStatus)))
 	if ret != 0 {
-		snap.AvailableRAM_MB = memStatus.AvailPhys / (1024 * 1024)
+		snap.AvailableRAMinMB = memStatus.AvailPhys / (1024 * 1024)
 	}
 
 	// Get page faults for current process

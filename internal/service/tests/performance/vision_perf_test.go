@@ -36,7 +36,7 @@ const (
 	// Pressure detection thresholds
 	ThresholdSlowTPS      = 10.0   // Flag if Kronk's TokensPerSecond < this (at 10 tps, 300 tokens = 30s)
 	ThresholdPageFaults   = 500000 // Flag if page faults delta > this (soft faults from mmap are normal)
-	ThresholdLowRAM_MB    = 500    // Flag if available RAM < this (MB)
+	ThresholdLowRAMinMB   = 500    // Flag if available RAM < this (MB)
 	ThresholdMinOutputTok = 20     // Flag if output tokens < this
 )
 
@@ -81,8 +81,8 @@ type ModelMetrics struct {
 }
 
 type SystemMetrics struct {
-	AvailableRAM_MB uint64
-	PageFaultsDelta uint64
+	AvailableRAMinMB uint64
+	PageFaultsDelta  uint64
 }
 
 type PressureFlags struct {
@@ -131,7 +131,7 @@ type Stats struct {
 	VarianceCV  float64
 
 	// Kronk timing breakdown
-	MeanTTFT_MS   float64
+	MeanTTFTinMS  float64
 	MeanGenTimeMS float64
 
 	// Memory pressure stats
@@ -147,13 +147,13 @@ type ModelMemory struct {
 }
 
 type HardwareInfo struct {
-	GPUName      string
-	GPUType      string
-	GPUTotalMB   uint64
-	GPUFreeMB    uint64
-	HasGPU       bool
-	SystemRAM_MB uint64
-	GPUOffload   bool
+	GPUName       string
+	GPUType       string
+	GPUTotalMB    uint64
+	GPUFreeMB     uint64
+	HasGPU        bool
+	SystemRAMinMB uint64
+	GPUOffload    bool
 }
 
 type BenchmarkInfo struct {
@@ -266,7 +266,7 @@ func TestVisionPerformance(t *testing.T) {
 					maxSize,
 					cfg.Name,
 					aggResult.Stats.MeanTime,
-					aggResult.Stats.MeanTTFT_MS,
+					aggResult.Stats.MeanTTFTinMS,
 					aggResult.Stats.VarianceCV*100,
 					int(aggResult.Stats.SuccessRate*float64(repetitions)),
 					repetitions)
@@ -345,7 +345,7 @@ func runWithRepetitions(ctx context.Context, krn *kronksdk.Kronk, imgPath string
 			run.Metrics.TokensPerSecond)
 
 		fmt.Printf("\n   Memory:  avlbRAM=%dMB pgFaults=%d",
-			run.System.AvailableRAM_MB,
+			run.System.AvailableRAMinMB,
 			run.System.PageFaultsDelta)
 
 		if run.Flags.Any() {
@@ -390,7 +390,7 @@ func runSingleInference(ctx context.Context, krn *kronksdk.Kronk, imageData []by
 	run := RunResult{Run: runNum}
 
 	snapBefore := sysmon.Capture()
-	run.System.AvailableRAM_MB = snapBefore.AvailableRAM_MB
+	run.System.AvailableRAMinMB = snapBefore.AvailableRAMinMB
 
 	messages := []model.D{
 		{"role": "system", "content": P.SystemPrompt},
@@ -466,7 +466,7 @@ func runSingleInference(ctx context.Context, krn *kronksdk.Kronk, imageData []by
 	if run.System.PageFaultsDelta > ThresholdPageFaults {
 		run.Flags.HighFaults = true
 	}
-	if run.System.AvailableRAM_MB > 0 && run.System.AvailableRAM_MB < ThresholdLowRAM_MB {
+	if run.System.AvailableRAMinMB > 0 && run.System.AvailableRAMinMB < ThresholdLowRAMinMB {
 		run.Flags.LowRAM = true
 	}
 	if u.OutputTokens < ThresholdMinOutputTok {
@@ -489,8 +489,8 @@ func calculateStats(runs []RunResult) Stats {
 		if r.System.PageFaultsDelta > stats.MaxPageFaults {
 			stats.MaxPageFaults = r.System.PageFaultsDelta
 		}
-		if r.System.AvailableRAM_MB > 0 && r.System.AvailableRAM_MB < stats.MinAvailableRAM {
-			stats.MinAvailableRAM = r.System.AvailableRAM_MB
+		if r.System.AvailableRAMinMB > 0 && r.System.AvailableRAMinMB < stats.MinAvailableRAM {
+			stats.MinAvailableRAM = r.System.AvailableRAMinMB
 		}
 		if r.Flags.Any() {
 			stats.PressureRunCount++
@@ -524,7 +524,7 @@ func calculateStats(runs []RunResult) Stats {
 	stats.MeanInTok = mean(inTok)
 	stats.MeanOutTok = mean(outTok)
 	stats.MeanTPS = mean(tps)
-	stats.MeanTTFT_MS = mean(ttft)
+	stats.MeanTTFTinMS = mean(ttft)
 	stats.MeanGenTimeMS = mean(genTime)
 
 	if stats.MeanTime > 0 {
@@ -607,12 +607,12 @@ func detectHardware() HardwareInfo {
 
 	systemRAM := devs.SystemRAMBytes / (1024 * 1024)
 	if systemRAM == 0 {
-		systemRAM = sysmon.Capture().AvailableRAM_MB
+		systemRAM = sysmon.Capture().AvailableRAMinMB
 	}
 
 	hw := HardwareInfo{
-		SystemRAM_MB: systemRAM,
-		GPUOffload:   devs.SupportsGPUOffload,
+		SystemRAMinMB: systemRAM,
+		GPUOffload:    devs.SupportsGPUOffload,
 	}
 
 	for _, d := range devs.Devices {
@@ -639,7 +639,7 @@ func printHardware(hw HardwareInfo) {
 	} else {
 		fmt.Printf("GPU:         none\n")
 	}
-	fmt.Printf("System RAM:  %d MB\n", hw.SystemRAM_MB)
+	fmt.Printf("System RAM:  %d MB\n", hw.SystemRAMinMB)
 	fmt.Printf("GPU Offload: %v\n", hw.GPUOffload)
 }
 
@@ -679,8 +679,8 @@ func printConfigs(info BenchmarkInfo) {
 		var usePct float64
 		if hw.HasGPU && hw.GPUTotalMB > 0 {
 			usePct = vramMB / float64(hw.GPUTotalMB) * 100
-		} else if hw.SystemRAM_MB > 0 {
-			usePct = vramMB / float64(hw.SystemRAM_MB) * 100
+		} else if hw.SystemRAMinMB > 0 {
+			usePct = vramMB / float64(hw.SystemRAMinMB) * 100
 		}
 
 		fmt.Printf("%-10s | %6d | %6d | %7d | %8s | %8s | %10.1f | %10.1f | %7.1f%%\n",
@@ -811,7 +811,7 @@ func printGroupedResults(results []AggregatedResult) {
 
 		fmt.Printf("%-8s | %4d | %-15s | %11.0f | %9.0f | %9.0f | %8s | %6.0f | %6.0f | %5.1f | %5s | %8s\n",
 			r.Config, r.MaxSize, r.Image,
-			r.Stats.MeanTime, r.Stats.MeanTTFT_MS, r.Stats.MeanGenTimeMS,
+			r.Stats.MeanTime, r.Stats.MeanTTFTinMS, r.Stats.MeanGenTimeMS,
 			cvPct, r.Stats.MeanInTok, r.Stats.MeanOutTok,
 			r.Stats.MeanTPS, successPct, pressureStr)
 	}
@@ -828,7 +828,7 @@ func printPressureSummary(results []AggregatedResult) {
 	highFaultsRuns := 0
 	lowRAMRuns := 0
 	truncatedRuns := 0
-	var minRAM uint64 = ^uint64(0)
+	var minRAM = ^uint64(0) // Initialized at maximum value: 64 "1"s
 	var maxFaults uint64 = 0
 
 	for _, r := range results {
@@ -849,8 +849,8 @@ func printPressureSummary(results []AggregatedResult) {
 			if run.Flags.Truncated {
 				truncatedRuns++
 			}
-			if run.System.AvailableRAM_MB > 0 && run.System.AvailableRAM_MB < minRAM {
-				minRAM = run.System.AvailableRAM_MB
+			if run.System.AvailableRAMinMB > 0 && run.System.AvailableRAMinMB < minRAM {
+				minRAM = run.System.AvailableRAMinMB
 			}
 			if run.System.PageFaultsDelta > maxFaults {
 				maxFaults = run.System.PageFaultsDelta
@@ -907,7 +907,7 @@ func printConfigSummary(results []AggregatedResult) {
 			stats.inTok = append(stats.inTok, r.Stats.MeanInTok)
 			stats.outTok = append(stats.outTok, r.Stats.MeanOutTok)
 			stats.tps = append(stats.tps, r.Stats.MeanTPS)
-			stats.ttft = append(stats.ttft, r.Stats.MeanTTFT_MS)
+			stats.ttft = append(stats.ttft, r.Stats.MeanTTFTinMS)
 			stats.cvSum += r.Stats.VarianceCV
 		}
 		configStats[k] = stats
@@ -969,7 +969,7 @@ func saveCSV(info BenchmarkInfo, results []AggregatedResult) {
 
 	hw := info.Hardware
 	sb.WriteString(fmt.Sprintf("# hardware: gpu=%s gpu_type=%s gpu_total_mb=%d gpu_free_mb=%d system_ram_mb=%d gpu_offload=%v\n",
-		hw.GPUName, hw.GPUType, hw.GPUTotalMB, hw.GPUFreeMB, hw.SystemRAM_MB, hw.GPUOffload))
+		hw.GPUName, hw.GPUType, hw.GPUTotalMB, hw.GPUFreeMB, hw.SystemRAMinMB, hw.GPUOffload))
 
 	sb.WriteString("model,mmproj,cache_k,cache_v,max_tok,temp,prompt,")
 	sb.WriteString("config,ctx_win,nbatch,nubatch,vram_mb,kv_slot_mb,")
@@ -1005,7 +1005,7 @@ func saveCSV(info BenchmarkInfo, results []AggregatedResult) {
 			r.ImageInfo.OriginalW, r.ImageInfo.OriginalH,
 			r.ImageInfo.ResizedW, r.ImageInfo.ResizedH, r.ImageInfo.Bytes))
 		sb.WriteString(fmt.Sprintf("%.0f,%.0f,%.0f,%.0f,%.0f,%.0f,%.1f,%.2f,",
-			r.Stats.MeanTime, r.Stats.MeanTTFT_MS, r.Stats.MeanGenTimeMS,
+			r.Stats.MeanTime, r.Stats.MeanTTFTinMS, r.Stats.MeanGenTimeMS,
 			r.Stats.VarianceCV*100,
 			r.Stats.MeanInTok, r.Stats.MeanOutTok, r.Stats.MeanTPS, r.Stats.SuccessRate))
 		sb.WriteString(fmt.Sprintf("%d,%d,%d\n",
@@ -1041,7 +1041,7 @@ func saveCSV(info BenchmarkInfo, results []AggregatedResult) {
 				run.Metrics.CompletionTokens, run.Metrics.OutputTokens,
 				run.Metrics.TokensPerSecond))
 			sb.WriteString(fmt.Sprintf("%d,%d,%t,%t,%t,%t,",
-				run.System.AvailableRAM_MB, run.System.PageFaultsDelta,
+				run.System.AvailableRAMinMB, run.System.PageFaultsDelta,
 				run.Flags.SlowToken, run.Flags.HighFaults, run.Flags.LowRAM, run.Flags.Truncated))
 			sb.WriteString(fmt.Sprintf("\"%s\",\"%s\"\n", desc, errStr))
 		}

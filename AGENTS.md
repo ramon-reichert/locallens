@@ -218,6 +218,44 @@ Search query
 Models are loaded/unloaded between phases to avoid holding both in memory
 simultaneously (important for low-RAM machines).
 
+## Browser UI decisions
+
+The UI is a Go HTTP server serving a vanilla HTML/CSS/JS frontend. This was
+chosen after evaluating alternatives:
+
+- **Shell extension**: Rejected (requires COM/C++ on Windows, Explorer has no
+  external sort API).
+- **Electron**: Rejected (150 MB+ binary, overkill).
+- **Tauri**: Rejected (requires Rust dependency).
+- **Fyne**: Attempted, abandoned (requires CGO + OpenGL; hit a Go 1.25 Windows
+  cgo bug). Incompatible with the CGO_ENABLED=0 constraint.
+- **Browser UI**: Selected as the pragmatic starting point.
+
+Key implementation decisions:
+
+- **Vanilla stack**: No frameworks, no build tools, no JS dependencies.
+- **Embedded static files**: `go:embed` in `cmd/locallens/` for single-binary
+  distribution.
+- **Standard library routing**: `http.ServeMux`, no third-party router.
+- **SSE for progress**: Setup download status streamed via Server-Sent Events.
+- **CGO_ENABLED=0**: The entire stack avoids CGO (Kronk SDK uses FFI, not cgo).
+- **503 pattern**: Handlers return `setup_required` when `Service` is nil;
+  frontend opens the setup modal.
+- **No console window**: Production builds use `-ldflags "-H windowsgui"`.
+
+Known browser limitations:
+
+- No native file drag-and-drop from browser to OS.
+- Sandboxed filesystem — folder tree is a web-based recreation.
+- Explorer focus issues on Windows solved with `cmd /C start`.
+
+### Future: Wails migration
+
+**Wails** (Go + webview) is the planned migration target for a native desktop
+experience. The same HTML/JS frontend works inside Wails with minimal changes,
+gaining native dialogs, single-click launch, and better filesystem access.
+Migration is deferred until the browser UI stabilizes.
+
 ## Future refactor: IndexFolder durability and progress
 
 The current `IndexFolder` (service.go) batches all work in memory across two

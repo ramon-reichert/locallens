@@ -28,7 +28,10 @@ func run() error {
 
 	log := logger.New()
 
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log(ctx, "config warning, using defaults", "error", err)
+	}
 	if v := os.Getenv("KRONK_BASE_PATH"); v != "" {
 		cfg.BasePath = v
 	}

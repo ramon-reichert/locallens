@@ -1,3 +1,4 @@
+// Package testsboot provides the Boot to be run Once before any test or set of tests.
 package testsboot
 
 import (
@@ -25,7 +26,12 @@ var (
 func Boot() {
 	once.Do(func() {
 		Log = logger.New()
-		Cfg = config.Load()
+
+		var err error
+		Cfg, err = config.Load()
+		if err != nil {
+			fmt.Printf("config warning, using defaults: %v\n", err)
+		}
 
 		if v := os.Getenv("KRONK_BASE_PATH"); v != "" {
 			Cfg.BasePath = v

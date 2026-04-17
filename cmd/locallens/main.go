@@ -34,7 +34,10 @@ func run() error {
 	ctx := context.Background()
 	log := logger.New()
 
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log(ctx, "config warning, using defaults", "error", err)
+	}
 
 	// Initialize the Kronk SDK runtime, then try to create the service.
 	// If models aren't downloaded yet, this fails gracefully and the
@@ -52,14 +55,14 @@ func run() error {
 		Log:     log,
 		Service: svc,
 		SetupStatus: func() app.SetupStatusInfo {
-			c := config.Load()
+			c, _ := config.Load()
 			return app.SetupStatusInfo{
 				BasePath:    c.BasePath,
 				DefaultPath: config.DefaultBasePath(),
 			}
 		},
 		SetupRunner: func(ctx context.Context, log logger.Logger, basePath string, progress app.SetupProgress) (*service.Service, error) {
-			cfg := config.Load()
+			cfg, _ := config.Load()
 			cfg.BasePath = basePath
 
 			progress("libs", "downloading")
