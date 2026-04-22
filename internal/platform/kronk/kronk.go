@@ -22,6 +22,12 @@ type ModelPaths struct {
 	Embed  config.ModelFilePaths
 }
 
+// Init initializes the Kronk SDK runtime. Must be called before loading
+// any models.
+func Init() error {
+	return kronk.Init()
+}
+
 // InstallDependencies downloads llama.cpp libraries, templates, and catalog.
 // It uses cfg.Processor to select the correct GPU backend (e.g., "cuda",
 // "vulkan", "metal", "cpu"). When empty, auto-detects GPU hardware.

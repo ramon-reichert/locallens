@@ -10,8 +10,6 @@ import (
 	"net/http"
 	"os"
 
-	kronksdk "github.com/ardanlabs/kronk/sdk/kronk"
-
 	"github.com/ramon-reichert/locallens/internal/app"
 	"github.com/ramon-reichert/locallens/internal/platform/config"
 	"github.com/ramon-reichert/locallens/internal/platform/kronk"
@@ -43,7 +41,7 @@ func run() error {
 	// If models aren't downloaded yet, this fails gracefully and the
 	// handler layer returns 503 until setup completes.
 	var svc *service.Service
-	if err := kronksdk.Init(); err != nil {
+	if err := kronk.Init(); err != nil {
 		log(ctx, "kronk init failed, setup may be needed", "error", err)
 	} else if s, err := initService(log, cfg); err != nil {
 		log(ctx, "service init deferred, setup may be needed", "error", err)
@@ -51,52 +49,16 @@ func run() error {
 		svc = s
 	}
 
+	// Wire dependencies into the handler layer.
 	handlers := app.New(app.Config{
-		Log:     log,
-		Service: svc,
-		SetupStatus: func() app.SetupStatusInfo {
-			c, _ := config.Load()
-			return app.SetupStatusInfo{
-				BasePath:    c.BasePath,
-				DefaultPath: config.DefaultBasePath(),
-			}
-		},
-		SetupRunner: func(ctx context.Context, log logger.Logger, basePath string, progress app.SetupProgress) (*service.Service, error) {
-			cfg, _ := config.Load()
-			cfg.BasePath = basePath
-
-			progress("libs", "downloading")
-			if err := kronk.InstallDependencies(ctx, log, cfg); err != nil {
-				progress("libs", "error: "+err.Error())
-				return nil, err
-			}
-			progress("libs", "complete")
-
-			progress("models", "downloading")
-			if err := kronksdk.Init(); err != nil {
-				progress("models", "error: "+err.Error())
-				return nil, err
-			}
-			if _, err := kronk.DownloadModels(ctx, log, cfg); err != nil {
-				progress("models", "error: "+err.Error())
-				return nil, err
-			}
-			progress("models", "complete")
-
-			progress("init", "initializing")
-			svc, err := initService(log, cfg)
-			if err != nil {
-				progress("init", "error: "+err.Error())
-				return nil, err
-			}
-
-			config.Save(cfg)
-
-			return svc, nil
-		},
+		Log:         log,
+		Service:     svc,
+		SetupStatus: setupStatus,
+		SetupRunner: setupRunner,
 	})
 	defer handlers.Close(ctx)
 
+	// Serve embedded static files (HTML/CSS/JS) and API routes.
 	mux := http.NewServeMux()
 
 	staticFS, err := fs.Sub(staticFiles, "static")
@@ -106,16 +68,64 @@ func run() error {
 
 	handlers.Register(mux, staticFS)
 
-	srv := web.New(web.Config{
+	server := web.New(web.Config{
 		Log:  log,
 		Mux:  mux,
 		Host: "localhost",
 		Port: "8080",
 	})
 
-	return srv.ListenAndServe()
+	return server.ListenAndServe()
 }
 
+// setupStatus returns the current setup state for the UI.
+// Re-reads config each call to reflect any changes from a completed setup.
+func setupStatus() app.SetupStatusInfo {
+	c, _ := config.Load()
+	return app.SetupStatusInfo{
+		BasePath:    c.BasePath,
+		DefaultPath: config.DefaultBasePath(),
+	}
+}
+
+// setupRunner orchestrates the full setup flow: install llama.cpp libraries,
+// initialize the Kronk SDK, download models, and create the service.
+// Progress is reported to the caller via SSE through the progress callback.
+func setupRunner(ctx context.Context, log logger.Logger, basePath string, progress app.SetupProgress) (*service.Service, error) {
+	cfg, _ := config.Load()
+	cfg.BasePath = basePath
+
+	progress("libs", "downloading")
+	if err := kronk.InstallDependencies(ctx, log, cfg); err != nil {
+		progress("libs", "error: "+err.Error())
+		return nil, err
+	}
+	progress("libs", "complete")
+
+	progress("models", "downloading")
+	if err := kronk.Init(); err != nil {
+		progress("models", "error: "+err.Error())
+		return nil, err
+	}
+	if _, err := kronk.DownloadModels(ctx, log, cfg); err != nil {
+		progress("models", "error: "+err.Error())
+		return nil, err
+	}
+	progress("models", "complete")
+
+	progress("service", "initializing")
+	svc, err := initService(log, cfg)
+	if err != nil {
+		progress("service", "error: "+err.Error())
+		return nil, err
+	}
+
+	config.Save(cfg)
+
+	return svc, nil
+}
+
+// initService resolves model file paths and creates the Service.
 func initService(log logger.Logger, cfg config.Config) (*service.Service, error) {
 	paths, err := kronk.ResolvePaths(cfg)
 	if err != nil {

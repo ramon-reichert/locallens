@@ -45,11 +45,18 @@ internal/platform/
 - 3rd-party SDK types must not leak into exported APIs of internal packages.
   The project defines `config.ModelFilePaths` as its own type instead of using
   the Kronk SDK's `models.Path`.
+- Only `internal/platform/kronk/` imports the Kronk SDK directly (it is the
+  SDK boundary). `description/` and `embedding/` also import the SDK for
+  model loading and inference. `cmd/` must NOT import the SDK — it uses
+  the `platform/kronk` wrapper.
 
 ## Configuration
 
 All config lives in `internal/platform/config/config.go`. At runtime, defaults
-are overlaid with `~/.locallens/config.json`.
+are overlaid with `~/.locallens/config.json`. `config.Load()` returns
+`(Config, error)` — callers must handle the error (log a warning and continue
+with defaults). Config holds only static admin-set values; runtime state (e.g.,
+whether setup is complete) is derived from system state, not persisted in config.
 
 Key config fields and their rationale:
 - **`llamaCppVersion`**: Pin a specific llama.cpp library version for release stability.
@@ -98,7 +105,7 @@ local vision and embedding inference.
 
 | Kronk package | Where used | Purpose |
 |---|---|---|
-| `sdk/kronk` | `description/`, `embedding/`, `cmd/` | `kronk.New(model.Config)` loads a model. `kronk.Init()` initializes the runtime. `krn.Unload(ctx)` frees it. |
+| `sdk/kronk` | `description/`, `embedding/`, `kronk/` (platform) | `kronk.New(model.Config)` loads a model. `kronk.Init()` initializes the runtime. `krn.Unload(ctx)` frees it. |
 | `sdk/kronk/model` | `description/`, `embedding/`, perf tests | `model.Config` for engine params (ContextWindow, NBatch, CacheType). `model.D` for chat/embed request data. `model.GGMLType` for cache quantization. |
 | `sdk/tools/libs` | `kronk/` (platform) | `libs.New()` + `libs.Download()` to fetch llama.cpp shared libraries. `libs.WithVersion()` pins a specific build. |
 | `sdk/tools/models` | `kronk/` (platform) | `models.NewWithPaths()` + `models.Download()` / `models.FullPath()` to download and resolve GGUF model files. |

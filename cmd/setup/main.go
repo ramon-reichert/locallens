@@ -8,8 +8,6 @@ import (
 	"os"
 	"time"
 
-	kronksdk "github.com/ardanlabs/kronk/sdk/kronk"
-
 	"github.com/ramon-reichert/locallens/internal/platform/config"
 	"github.com/ramon-reichert/locallens/internal/platform/kronk"
 	"github.com/ramon-reichert/locallens/internal/platform/logger"
@@ -42,7 +40,7 @@ func run() error {
 	}
 
 	log(ctx, "initializing kronk")
-	if err := kronksdk.Init(); err != nil {
+	if err := kronk.Init(); err != nil {
 		return err
 	}
 
