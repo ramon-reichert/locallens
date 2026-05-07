@@ -206,15 +206,15 @@ func TestVisionPerformance(t *testing.T) {
 		fmt.Printf("\n\n    === Config: %s (ctx=%d, Nbatch=%d, NUbatch=%d) | maxTok=%d, temp=%.1f | %d reps ===\n\n",
 			cfg.Name, cfg.ContextWindow, cfg.NBatch, cfg.NUBatch, P.MaxTokens, P.Temperature, repetitions)
 
-		krn, err := kronksdk.New(model.Config{
-			ModelFiles:    testsboot.VisionPaths.ModelFiles,
-			ProjFile:      testsboot.VisionPaths.ProjFile,
-			ContextWindow: cfg.ContextWindow,
-			NBatch:        cfg.NBatch,
-			NUBatch:       cfg.NUBatch,
-			CacheTypeK:    cfg.CacheTypeK,
-			CacheTypeV:    cfg.CacheTypeV,
-		})
+		krn, err := kronksdk.New(
+			model.WithModelFiles(testsboot.VisionPaths.ModelFiles),
+			model.WithProjFile(testsboot.VisionPaths.ProjFile),
+			model.WithContextWindow(cfg.ContextWindow),
+			model.WithNBatch(cfg.NBatch),
+			model.WithNUBatch(cfg.NUBatch),
+			model.WithCacheTypeK(cfg.CacheTypeK),
+			model.WithCacheTypeV(cfg.CacheTypeV),
+		)
 		if err != nil {
 			fmt.Printf("config %s failed to load: %v\n", cfg.Name, err)
 			continue

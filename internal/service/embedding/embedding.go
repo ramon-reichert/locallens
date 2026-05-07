@@ -65,17 +65,15 @@ func (e *Embedder) Load(ctx context.Context) error {
 		fa = model.FlashAttentionEnabled
 	}
 
-	cfg := model.Config{
-		ModelFiles:     e.paths.ModelFiles,
-		ContextWindow:  em.ContextWindow,
-		NBatch:         em.NBatch,
-		NUBatch:        em.NUBatch,
-		CacheTypeK:     model.GGMLType(config.ParseGGMLType(em.CacheTypeK)),
-		CacheTypeV:     model.GGMLType(config.ParseGGMLType(em.CacheTypeV)),
-		FlashAttention: fa,
-	}
-
-	krn, err := kronk.New(cfg)
+	krn, err := kronk.New(
+		model.WithModelFiles(e.paths.ModelFiles),
+		model.WithContextWindow(em.ContextWindow),
+		model.WithNBatch(em.NBatch),
+		model.WithNUBatch(em.NUBatch),
+		model.WithCacheTypeK(model.GGMLType(config.ParseGGMLType(em.CacheTypeK))),
+		model.WithCacheTypeV(model.GGMLType(config.ParseGGMLType(em.CacheTypeV))),
+		model.WithFlashAttention(fa),
+	)
 	if err != nil {
 		return fmt.Errorf("load embedding model: %w", err)
 	}

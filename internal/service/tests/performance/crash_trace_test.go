@@ -82,15 +82,15 @@ func TestCrashTrace(t *testing.T) {
 			fmt.Printf("\n%s\n=== Stress config: %s (ctx=%d, Q_K=%d, Q_V=%d) ===\n%s\n",
 				strings.Repeat("=", 80), sc.name, sc.contextWindow, sc.cacheK, sc.cacheV, strings.Repeat("=", 80))
 
-			krn, err := kronksdk.New(model.Config{
-				ModelFiles:    testsboot.VisionPaths.ModelFiles,
-				ProjFile:      testsboot.VisionPaths.ProjFile,
-				ContextWindow: sc.contextWindow,
-				NBatch:        sc.nBatch,
-				NUBatch:       sc.nUBatch,
-				CacheTypeK:    sc.cacheK,
-				CacheTypeV:    sc.cacheV,
-			})
+			krn, err := kronksdk.New(
+				model.WithModelFiles(testsboot.VisionPaths.ModelFiles),
+				model.WithProjFile(testsboot.VisionPaths.ProjFile),
+				model.WithContextWindow(sc.contextWindow),
+				model.WithNBatch(sc.nBatch),
+				model.WithNUBatch(sc.nUBatch),
+				model.WithCacheTypeK(sc.cacheK),
+				model.WithCacheTypeV(sc.cacheV),
+			)
 			if err != nil {
 				t.Logf("config %s failed to load: %v", sc.name, err)
 				return

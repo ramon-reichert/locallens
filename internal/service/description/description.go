@@ -73,17 +73,15 @@ func (d *Describer) Load(ctx context.Context) error {
 
 	v := d.vision
 
-	cfg := model.Config{
-		ModelFiles:    d.paths.ModelFiles,
-		ProjFile:      d.paths.ProjFile,
-		ContextWindow: v.ContextWindow,
-		NBatch:        v.NBatch,
-		NUBatch:       v.NUBatch,
-		CacheTypeK:    model.GGMLType(config.ParseGGMLType(v.CacheTypeK)),
-		CacheTypeV:    model.GGMLType(config.ParseGGMLType(v.CacheTypeV)),
-	}
-
-	krn, err := kronk.New(cfg)
+	krn, err := kronk.New(
+		model.WithModelFiles(d.paths.ModelFiles),
+		model.WithProjFile(d.paths.ProjFile),
+		model.WithContextWindow(v.ContextWindow),
+		model.WithNBatch(v.NBatch),
+		model.WithNUBatch(v.NUBatch),
+		model.WithCacheTypeK(model.GGMLType(config.ParseGGMLType(v.CacheTypeK))),
+		model.WithCacheTypeV(model.GGMLType(config.ParseGGMLType(v.CacheTypeV))),
+	)
 	if err != nil {
 		return fmt.Errorf("load vision model: %w", err)
 	}
