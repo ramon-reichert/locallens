@@ -41,7 +41,7 @@ func run() error {
 	// If models aren't downloaded yet, this fails gracefully and the
 	// handler layer returns 503 until setup completes.
 	var svc *service.Service
-	if err := kronk.Init(); err != nil {
+	if err := kronk.Init(cfg); err != nil {
 		log(ctx, "kronk init failed, setup may be needed", "error", err)
 	} else if s, err := initService(log, cfg); err != nil {
 		log(ctx, "service init deferred, setup may be needed", "error", err)
@@ -103,7 +103,7 @@ func setupRunner(ctx context.Context, log logger.Logger, basePath string, progre
 	progress("libs", "complete")
 
 	progress("models", "downloading")
-	if err := kronk.Init(); err != nil {
+	if err := kronk.Init(cfg); err != nil {
 		progress("models", "error: "+err.Error())
 		return nil, err
 	}

@@ -40,7 +40,7 @@ func run() error {
 	}
 
 	log(ctx, "initializing kronk")
-	if err := kronk.Init(); err != nil {
+	if err := kronk.Init(cfg); err != nil {
 		return err
 	}
 

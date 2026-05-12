@@ -16,18 +16,21 @@
 
 # To-do:
 
-- Rethink the service flow according to the plan saved in agents.md under indexFolder durability and progress
-- Think of make LocalLens service logic private and make the part related to Kronk public;
-- See if the vision model can get benefit from FlashAtention;
 - Look for suggested model config values at the model provider sites;
+- Rethink the service flow according to the plan saved in agents.md under indexFolder durability and progress
+- Add some config values to the setup panel and make them configurable through the app;
+- Think of make LocalLens service logic private and make the part related to Kronk public;
+- Check if the error with vulkan continues -> T-019dfff7-3572-72cc-bede-689295bad366
+- Release an MVP
+- Test performance with cpu vs vulkan
+- See if the vision model can get benefit from FlashAtention;
 - Use grammar (Kronk)
 - See if model can use same image decoded to subsequent prompts;
 - Adjust embedding flow to be more accurate;
 - Make performance tests for the embedding too;
 - Search for "TODO" along the codebase;
-- The bug that sometimes happened after a good decription to all subsequent files to index seems (amp threads continue T-019d7a19-2953-74c6-8018-9a6afe182c2a) to be solved by addinng a corrected version of package gonja to platform/ and redirecting go.mod to use it. It could be reported upstream and, if corrected, the replacing could be removed. Kronk will be vendored after MVP, anyway.
 - Vendor when reach stable version;
-- Add some config values to the setup panel and make them configurable through the app;
+
 - Review and correct indexing/searching recursiveness code; Add recursiveness test too;
 
 

@@ -81,6 +81,7 @@ func (d *Describer) Load(ctx context.Context) error {
 		model.WithNUBatch(v.NUBatch),
 		model.WithCacheTypeK(model.GGMLType(config.ParseGGMLType(v.CacheTypeK))),
 		model.WithCacheTypeV(model.GGMLType(config.ParseGGMLType(v.CacheTypeV))),
+		model.WithIncrementalCache(false),
 	)
 	if err != nil {
 		return fmt.Errorf("load vision model: %w", err)

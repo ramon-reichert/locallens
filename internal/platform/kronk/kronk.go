@@ -23,9 +23,26 @@ type ModelPaths struct {
 }
 
 // Init initializes the Kronk SDK runtime. Must be called before loading
-// any models.
-func Init() error {
-	return kronk.Init()
+// any models. When cfg.Processor (or KRONK_PROCESSOR) selects a backend,
+// the corresponding library path is pinned so the runtime does not auto-
+// detect a different processor (e.g. Vulkan) at load time.
+func Init(cfg config.Config) error {
+	processor := resolveProcessor(cfg)
+	if processor == "" {
+		return kronk.Init()
+	}
+
+	p, err := defaults.Processor(processor)
+	if err != nil {
+		return fmt.Errorf("parse processor %q: %w", processor, err)
+	}
+
+	libsys, err := libs.New(libs.WithProcessor(p))
+	if err != nil {
+		return fmt.Errorf("llama.cpp libs new: %w", err)
+	}
+
+	return kronk.Init(kronk.WithLibPath(libsys.LibsPath()))
 }
 
 // InstallDependencies downloads llama.cpp libraries, templates, and catalog.
@@ -36,11 +53,7 @@ func InstallDependencies(ctx context.Context, log logger.Logger, cfg config.Conf
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Minute)
 	defer cancel()
 
-	// Config processor is used when KRONK_PROCESSOR env var is not set.
-	processor := cfg.Processor
-	if v := os.Getenv("KRONK_PROCESSOR"); v != "" {
-		processor = v
-	}
+	processor := resolveProcessor(cfg)
 
 	log(ctx, "installing dependencies", "processor", processor)
 
@@ -64,6 +77,15 @@ func InstallDependencies(ctx context.Context, log logger.Logger, cfg config.Conf
 	}
 
 	return nil
+}
+
+// resolveProcessor returns the configured processor name, with the
+// KRONK_PROCESSOR env var taking precedence over cfg.Processor.
+func resolveProcessor(cfg config.Config) string {
+	if v := os.Getenv("KRONK_PROCESSOR"); v != "" {
+		return v
+	}
+	return cfg.Processor
 }
 
 // ResolvePaths resolves the file paths for already-downloaded models.

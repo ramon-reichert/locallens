@@ -73,6 +73,7 @@ func (e *Embedder) Load(ctx context.Context) error {
 		model.WithCacheTypeK(model.GGMLType(config.ParseGGMLType(em.CacheTypeK))),
 		model.WithCacheTypeV(model.GGMLType(config.ParseGGMLType(em.CacheTypeV))),
 		model.WithFlashAttention(fa),
+		model.WithIncrementalCache(false),
 	)
 	if err != nil {
 		return fmt.Errorf("load embedding model: %w", err)

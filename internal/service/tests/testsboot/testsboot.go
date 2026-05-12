@@ -35,7 +35,7 @@ func Boot() {
 			Cfg.BasePath = v
 		}
 
-		if err := kronk.Init(); err != nil {
+		if err := kronk.Init(Cfg); err != nil {
 			fmt.Printf("kronk init: %v\n", err)
 			os.Exit(1)
 		}
