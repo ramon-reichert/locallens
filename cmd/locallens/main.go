@@ -43,7 +43,7 @@ func run() error {
 	var svc *service.Service
 	if err := kronk.Init(cfg); err != nil {
 		log(ctx, "kronk init failed, setup may be needed", "error", err)
-	} else if s, err := initService(log, cfg); err != nil {
+	} else if s, err := initService(ctx, log, cfg); err != nil {
 		log(ctx, "service init deferred, setup may be needed", "error", err)
 	} else {
 		svc = s
@@ -114,7 +114,7 @@ func setupRunner(ctx context.Context, log logger.Logger, basePath string, progre
 	progress("models", "complete")
 
 	progress("service", "initializing")
-	svc, err := initService(log, cfg)
+	svc, err := initService(ctx, log, cfg)
 	if err != nil {
 		progress("service", "error: "+err.Error())
 		return nil, err
@@ -126,16 +126,16 @@ func setupRunner(ctx context.Context, log logger.Logger, basePath string, progre
 }
 
 // initService resolves model file paths and creates the Service.
-func initService(log logger.Logger, cfg config.Config) (*service.Service, error) {
+func initService(ctx context.Context, log logger.Logger, cfg config.Config) (*service.Service, error) {
 	paths, err := kronk.ResolvePaths(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	return service.New(service.Config{
+	return service.New(ctx, service.Config{
 		Log:         log,
 		VisionPaths: paths.Vision,
 		EmbedPaths:  paths.Embed,
 		AppCfg:      cfg,
-	}), nil
+	})
 }

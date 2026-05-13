@@ -75,15 +75,18 @@ func TestSimilarity(t *testing.T) {
 		t.Fatalf("copy testdata: %v", err)
 	}
 
-	svc := service.New(service.Config{
+	svc, err := service.New(ctx, service.Config{
 		Log:         testsboot.Log,
 		VisionPaths: testsboot.VisionPaths,
 		EmbedPaths:  testsboot.EmbedPaths,
 	})
+	if err != nil {
+		t.Fatalf("create service: %v", err)
+	}
 	defer svc.Close(ctx)
 
 	// Index the folder
-	count, err := svc.IndexFolder(ctx, tmp, false)
+	count, err := svc.IndexFolder(ctx, tmp, nil)
 	if err != nil {
 		t.Fatalf("index folder: %v", err)
 	}

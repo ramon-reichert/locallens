@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -119,14 +120,64 @@ func (h *Handlers) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	count, err := svc.IndexFolder(r.Context(), req.Folder, req.Recursive)
-	if err != nil {
-		h.log(r.Context(), "index error", "folder", req.Folder, "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]int{"count": count})
+	// send writes a single SSE event. Any field absent from event is omitted
+	// from the JSON payload by the encoder.
+	send := func(event map[string]any) {
+		buf, _ := json.Marshal(event)
+		fmt.Fprintf(w, "data: %s\n\n", buf)
+		flusher.Flush()
+	}
+
+	progress := func(p service.IndexProgressInfo) {
+		send(map[string]any{
+			"type":    "progress",
+			"folder":  p.Folder,
+			"current": p.Current,
+			"done":    p.Done,
+			"total":   p.Total,
+			"etaMs":   p.ETA.Milliseconds(),
+		})
+	}
+
+	// Flush an initial event so the client's `await fetch(...)` resolves
+	// immediately. Without this, the browser blocks until the first body byte
+	// is sent, which can be 30+ seconds while the vision model loads — making
+	// the UI look frozen.
+	send(map[string]any{"type": "started", "folder": req.Folder, "recursive": req.Recursive})
+
+	h.log(r.Context(), "handle index", "folder", req.Folder, "recursive", req.Recursive)
+
+	// r.Context() is cancelled when the client closes the connection (e.g.,
+	// the user hits Stop in the UI). The Service checks ctx.Done() between
+	// images and returns context.Canceled once the in-flight image completes.
+	var (
+		count int
+		err   error
+	)
+	if req.Recursive {
+		count, err = svc.IndexTree(r.Context(), req.Folder, progress)
+	} else {
+		count, err = svc.IndexFolder(r.Context(), req.Folder, progress)
+	}
+
+	switch {
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		send(map[string]any{"type": "cancelled", "count": count})
+	case err != nil:
+		h.log(r.Context(), "index error", "folder", req.Folder, "error", err)
+		send(map[string]any{"type": "error", "error": err.Error(), "count": count})
+	default:
+		send(map[string]any{"type": "done", "count": count})
+	}
 }
 
 func (h *Handlers) handleSearch(w http.ResponseWriter, r *http.Request) {

@@ -9,6 +9,7 @@ const state = {
     currentImages: [],
     pickerExpanded: new Set(),
     pickerChildrenCache: {},
+    indexAbort: null,
 };
 
 // Main UI elements
@@ -19,6 +20,7 @@ const subfolderSearchCheck = document.getElementById("subfolder-search-check");
 const subfolderIndexCheck = document.getElementById("subfolder-index-check");
 const folderTree = document.getElementById("folder-tree");
 const indexBtn = document.getElementById("index-btn");
+const indexStopBtn = document.getElementById("index-stop-btn");
 const folderStatus = document.getElementById("folder-status");
 const resultsStatus = document.getElementById("results-status");
 const resultsGrid = document.getElementById("results-grid");
@@ -44,6 +46,9 @@ let pickerSelectedPath = "";
 
 // Event listeners
 indexBtn.addEventListener("click", indexFolder);
+indexStopBtn.addEventListener("click", () => {
+    if (state.indexAbort) state.indexAbort.abort();
+});
 searchBtn.addEventListener("click", doSearch);
 searchInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") doSearch();
@@ -664,13 +669,21 @@ async function indexFolder() {
     const recursive = subfolderIndexCheck.checked;
 
     indexBtn.disabled = true;
-    folderStatus.textContent = "Indexing... this may take a while";
+    indexStopBtn.hidden = false;
+    folderStatus.textContent = "Starting...";
+
+    const controller = new AbortController();
+    state.indexAbort = controller;
+
+    let finalCount = 0;
+    let stopped = false;
 
     try {
         const res = await fetch("/api/index", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ folder: state.selectedPath, recursive }),
+            signal: controller.signal,
         });
 
         if (res.status === 503) {
@@ -678,20 +691,97 @@ async function indexFolder() {
             return;
         }
 
-        const data = await res.json();
+        if (!res.ok) {
+            folderStatus.textContent = "Indexing failed";
+            return;
+        }
 
-        if (res.ok) {
-            folderStatus.textContent = `${data.count} images indexed`;
-            delete state.childrenCache[state.selectedPath];
-            loadFolderImages(state.selectedPath);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        outer: while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop();
+
+            for (const line of lines) {
+                if (!line.startsWith("data: ")) continue;
+                let event;
+                try {
+                    event = JSON.parse(line.slice(6));
+                } catch {
+                    continue;
+                }
+
+                switch (event.type) {
+                    case "started":
+                        folderStatus.textContent = "Loading vision model...";
+                        break;
+                    case "progress":
+                        finalCount = event.done;
+                        folderStatus.textContent = formatIndexProgress(event);
+                        break;
+                    case "done":
+                        finalCount = event.count;
+                        folderStatus.textContent = `${event.count} images indexed`;
+                        break outer;
+                    case "cancelled":
+                        finalCount = event.count;
+                        stopped = true;
+                        folderStatus.textContent = `Stopped — ${event.count} images indexed`;
+                        break outer;
+                    case "error":
+                        finalCount = event.count || 0;
+                        folderStatus.textContent = `Indexing failed: ${event.error}`;
+                        break outer;
+                }
+            }
+        }
+    } catch (err) {
+        if (err.name === "AbortError") {
+            stopped = true;
+            folderStatus.textContent = `Stopped — ${finalCount} images indexed`;
         } else {
             folderStatus.textContent = "Indexing failed";
         }
-    } catch {
-        folderStatus.textContent = "Indexing failed";
     } finally {
+        state.indexAbort = null;
         indexBtn.disabled = false;
+        indexStopBtn.hidden = true;
+        // Refresh the file list so newly-indexed images show up.
+        delete state.childrenCache[state.selectedPath];
+        if (state.selectedPath) loadFolderImages(state.selectedPath);
+        // Note: stopped is logged in folderStatus already; no extra UI work.
+        void stopped;
     }
+}
+
+function formatIndexProgress(p) {
+    const percent = p.total > 0 ? Math.floor((p.done / p.total) * 100) : 0;
+    const eta = formatETA(p.etaMs);
+    const file = p.current ? ` — ${shortenPath(p.current)}` : "";
+    return `Indexing ${p.done}/${p.total} (${percent}%) — ETA ${eta}${file}`;
+}
+
+function formatETA(ms) {
+    if (!ms || ms <= 0) return "—";
+    const sec = Math.round(ms / 1000);
+    if (sec < 60) return `${sec}s`;
+    const min = Math.floor(sec / 60);
+    const rem = sec % 60;
+    if (min < 60) return rem ? `${min}m ${rem}s` : `${min}m`;
+    const hr = Math.floor(min / 60);
+    const minRem = min % 60;
+    return minRem ? `${hr}h ${minRem}m` : `${hr}h`;
+}
+
+function shortenPath(p) {
+    const i = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\"));
+    return i >= 0 ? p.slice(i + 1) : p;
 }
 
 // ---- Search ----

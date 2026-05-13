@@ -16,18 +16,23 @@
 
 # To-do:
 
-- Look for suggested model config values at the model provider sites;
 - Rethink the service flow according to the plan saved in agents.md under indexFolder durability and progress
+  - remove "include subfolders" from UI
+  - make UI atualize while and after describing each image (bottom logs and image thumb checkboxes) 
+  - atualize agents.md with changes implemented
 - Add some config values to the setup panel and make them configurable through the app;
 - Think of make LocalLens service logic private and make the part related to Kronk public;
 - Check if the error with vulkan continues -> T-019dfff7-3572-72cc-bede-689295bad366
 - Release an MVP
+
 - Test performance with cpu vs vulkan
-- See if the vision model can get benefit from FlashAtention;
-- Use grammar (Kronk)
-- See if model can use same image decoded to subsequent prompts;
 - Adjust embedding flow to be more accurate;
 - Make performance tests for the embedding too;
+- Look for suggested model config values at the model provider sites, or test other models > https://chatgpt.com/c/6a04c226-7d9c-83e9-86ae-7f8743cea1ec ;
+- See if the vision model can get benefit from FlashAtention;
+- Use grammar (Kronk)
+- See if model can use same image decoded to subsequent prompts (if we realize that it's need to a better embedding);
+
 - Search for "TODO" along the codebase;
 - Vendor when reach stable version;
 

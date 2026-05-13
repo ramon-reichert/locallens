@@ -51,17 +51,22 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	svc = service.New(service.Config{
+	var svcErr error
+	svc, svcErr = service.New(ctx, service.Config{
 		Log:         testsboot.Log,
 		VisionPaths: testsboot.VisionPaths,
 		EmbedPaths:  testsboot.EmbedPaths,
 		AppCfg:      testsboot.Cfg,
 	})
+	if svcErr != nil {
+		fmt.Printf("create service: %v\n", svcErr)
+		os.Exit(1)
+	}
 
 	fmt.Println("\n===== TEST MAIN > IndexFolder =====")
 
 	indexStart := time.Now()
-	count, err := svc.IndexFolder(ctx, testFolder, false)
+	count, err := svc.IndexFolder(ctx, testFolder, nil)
 	if err != nil {
 		fmt.Printf("index folder: %v\n", err)
 		os.Exit(1)
