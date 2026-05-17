@@ -140,6 +140,7 @@ func (h *Handlers) handleIndex(w http.ResponseWriter, r *http.Request) {
 	progress := func(p service.IndexProgressInfo) {
 		send(map[string]any{
 			"type":    "progress",
+			"stage":   p.Stage,
 			"folder":  p.Folder,
 			"current": p.Current,
 			"done":    p.Done,

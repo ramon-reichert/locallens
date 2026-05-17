@@ -215,6 +215,25 @@ button:disabled {
     min-height: 16px;
 }
 
+#index-progress-wrap {
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#index-progress {
+    flex: 1;
+    height: 8px;
+    accent-color: #00d9ff;
+}
+
+#index-progress-text {
+    font-size: 11px;
+    color: #8888aa;
+    white-space: nowrap;
+}
+
 /* Results Panel */
 
 #results-panel {
@@ -555,22 +574,6 @@ button:disabled {
 .result-card.selected {
     border-color: #00d9ff;
     box-shadow: 0 0 0 1px #00d9ff;
-}
-
-/* Subfolder checkbox */
-
-.subfolder-label {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 12px;
-    color: #8888aa;
-    white-space: nowrap;
-    cursor: pointer;
-}
-
-.subfolder-label input[type="checkbox"] {
-    accent-color: #00d9ff;
 }
 
 /* Folder picker tree style */

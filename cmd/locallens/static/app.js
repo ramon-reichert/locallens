@@ -16,12 +16,13 @@ const state = {
 const searchInput = document.getElementById("search-input");
 const searchBtn = document.getElementById("search-btn");
 const topkInput = document.getElementById("topk-input");
-const subfolderSearchCheck = document.getElementById("subfolder-search-check");
-const subfolderIndexCheck = document.getElementById("subfolder-index-check");
 const folderTree = document.getElementById("folder-tree");
 const indexBtn = document.getElementById("index-btn");
 const indexStopBtn = document.getElementById("index-stop-btn");
 const folderStatus = document.getElementById("folder-status");
+const indexProgressWrap = document.getElementById("index-progress-wrap");
+const indexProgress = document.getElementById("index-progress");
+const indexProgressText = document.getElementById("index-progress-text");
 const resultsStatus = document.getElementById("results-status");
 const resultsGrid = document.getElementById("results-grid");
 const fileList = document.getElementById("file-list");
@@ -666,11 +667,10 @@ async function indexFolder() {
     if (requireSetup()) return;
     if (!state.selectedPath) return;
 
-    const recursive = subfolderIndexCheck.checked;
-
     indexBtn.disabled = true;
     indexStopBtn.hidden = false;
     folderStatus.textContent = "Starting...";
+    showProgress(0, 0, 0);
 
     const controller = new AbortController();
     state.indexAbort = controller;
@@ -682,7 +682,7 @@ async function indexFolder() {
         const res = await fetch("/api/index", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ folder: state.selectedPath, recursive }),
+            body: JSON.stringify({ folder: state.selectedPath }),
             signal: controller.signal,
         });
 
@@ -722,21 +722,37 @@ async function indexFolder() {
                         folderStatus.textContent = "Loading vision model...";
                         break;
                     case "progress":
-                        finalCount = event.done;
-                        folderStatus.textContent = formatIndexProgress(event);
+                        if (event.stage === "describing") {
+                            // Slow operation — show activity in the status.
+                            // Progress bar/ETA are not touched here because
+                            // the describing event carries no timing data,
+                            // so we'd just overwrite the previous valid ETA
+                            // with "—".
+                            folderStatus.textContent = formatDescribing(event);
+                        } else {
+                            // stage === "indexed": image fully saved.
+                            // Update progress bar (value + ETA) and flip
+                            // the per-image checkbox.
+                            finalCount = event.done;
+                            markImageIndexed(event.current);
+                            showProgress(event.done, event.total, event.etaMs);
+                        }
                         break;
                     case "done":
                         finalCount = event.count;
                         folderStatus.textContent = `${event.count} images indexed`;
+                        hideProgress();
                         break outer;
                     case "cancelled":
                         finalCount = event.count;
                         stopped = true;
                         folderStatus.textContent = `Stopped — ${event.count} images indexed`;
+                        hideProgress();
                         break outer;
                     case "error":
                         finalCount = event.count || 0;
                         folderStatus.textContent = `Indexing failed: ${event.error}`;
+                        hideProgress();
                         break outer;
                 }
             }
@@ -748,6 +764,7 @@ async function indexFolder() {
         } else {
             folderStatus.textContent = "Indexing failed";
         }
+        hideProgress();
     } finally {
         state.indexAbort = null;
         indexBtn.disabled = false;
@@ -760,11 +777,59 @@ async function indexFolder() {
     }
 }
 
-function formatIndexProgress(p) {
-    const percent = p.total > 0 ? Math.floor((p.done / p.total) * 100) : 0;
-    const eta = formatETA(p.etaMs);
+function showProgress(done, total, etaMs) {
+    indexProgressWrap.hidden = false;
+    indexProgress.value = total > 0 ? Math.floor((done / total) * 100) : 0;
+    const eta = etaMs > 0 ? formatETA(etaMs) : "—";
+    indexProgressText.textContent = `${done}/${total} \u2022 ETA ${eta}`;
+}
+
+function hideProgress() {
+    indexProgressWrap.hidden = true;
+    indexProgress.value = 0;
+    indexProgressText.textContent = "";
+}
+
+function formatDescribing(p) {
+    const next = p.done + 1;
     const file = p.current ? ` — ${shortenPath(p.current)}` : "";
-    return `Indexing ${p.done}/${p.total} (${percent}%) — ETA ${eta}${file}`;
+    return `Describing image ${next}/${p.total}${file}`;
+}
+
+// markImageIndexed flips the ✅ marker on the row and the result card for the
+// just-indexed image, plus updates the cached image record so subsequent
+// renders preserve the state. Called per image as "indexed" events arrive.
+function markImageIndexed(path) {
+    if (!path) return;
+
+    for (const img of state.currentImages) {
+        if (img.path === path) {
+            img.indexed = true;
+            break;
+        }
+    }
+
+    const row = fileList.querySelector(`.file-row[data-path="${cssEscape(path)}"]`);
+    if (row) {
+        const status = row.querySelector(".file-status");
+        if (status) status.textContent = "\u2705";
+    }
+
+    const card = resultsGrid.querySelector(`.result-card[data-path="${cssEscape(path)}"]`);
+    if (card) {
+        const icon = card.querySelector(".status-icon");
+        if (icon) {
+            icon.textContent = "\u2705";
+            icon.title = "Indexed";
+        }
+    }
+}
+
+// cssEscape quotes a string for use inside an attribute selector. Falls back
+// to a manual escape when CSS.escape isn't available (very old browsers).
+function cssEscape(s) {
+    if (window.CSS && CSS.escape) return CSS.escape(s);
+    return s.replace(/(["\\])/g, "\\$1");
 }
 
 function formatETA(ms) {
@@ -793,7 +858,6 @@ async function doSearch() {
     if (!query || !state.selectedPath) return;
 
     const k = parseInt(topkInput.value) || 10;
-    const recursive = subfolderSearchCheck.checked;
 
     searchBtn.disabled = true;
     resultsStatus.textContent = "Searching...";
@@ -802,7 +866,7 @@ async function doSearch() {
 
     try {
         const res = await fetch(
-            `/api/search?q=${encodeURIComponent(query)}&folder=${encodeURIComponent(state.selectedPath)}&k=${k}&recursive=${recursive}`
+            `/api/search?q=${encodeURIComponent(query)}&folder=${encodeURIComponent(state.selectedPath)}&k=${k}`
         );
 
         if (res.status === 503) {

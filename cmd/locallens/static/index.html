@@ -15,10 +15,6 @@
                 <label id="topk-label"> Show top:
                     <input type="number" id="topk-input" value="10" min="1" max="100">
                 </label>
-                <label id="subfolder-search-label" class="subfolder-label">
-                    <input type="checkbox" id="subfolder-search-check">
-                    Include subfolders
-                </label>
                 <button id="search-btn" disabled>Search</button>
             </div>
             <button id="setup-btn" title="Setup">&#9881;<span id="setup-badge"></span></button>
@@ -30,13 +26,13 @@
                 </div>
                 <div id="folder-tree"></div>
                 <div id="folder-actions">
-                    <label class="subfolder-label">
-                        <input type="checkbox" id="subfolder-index-check">
-                        Include subfolders
-                    </label>
                     <button id="index-btn" disabled>Index Folder</button>
                     <button id="index-stop-btn" hidden>Stop</button>
                     <div id="folder-status"></div>
+                    <div id="index-progress-wrap" hidden>
+                        <progress id="index-progress" max="100" value="0"></progress>
+                        <span id="index-progress-text"></span>
+                    </div>
                 </div>
             </aside>
             <aside id="file-panel">

@@ -76,19 +76,28 @@ func New(ctx context.Context, cfg Config) (*Service, error) {
 }
 
 // IndexProgressInfo describes the state of an in-progress indexing operation.
-// Done counts images successfully described+embedded+saved so far in this run.
-// Total counts only images that need new work — already-indexed images that
-// were skipped on resume don't contribute to either Done or Total.
+// Stage is one of:
+//   - "describing": the image is about to be sent to the vision model. ETA is
+//     not set (we don't yet know how long it will take). Done is the count of
+//     images already fully indexed (i.e., it does not include this one).
+//   - "indexed": the image was fully described, embedded, and saved. Done
+//     includes this image, and ETA is the estimated remaining time based on
+//     a running average of per-image elapsed time.
+//
+// Already-indexed images that were skipped on resume don't trigger callbacks
+// and don't contribute to either Done or Total.
 type IndexProgressInfo struct {
+	Stage   string        // "describing" or "indexed"
 	Folder  string        // current folder being processed
-	Current string        // path of the image just processed
+	Current string        // path of the image being processed
 	Done    int           // newly indexed images so far
 	Total   int           // total new images to index across all folders in this call
-	ETA     time.Duration // estimated remaining time, based on running average
+	ETA     time.Duration // estimated remaining time (only set when Stage == "indexed")
 }
 
-// IndexProgress is invoked once after each image is fully indexed and saved.
-// Pass nil to disable progress reporting.
+// IndexProgress is invoked at multiple points per image: once when the image
+// is about to be described (Stage="describing") and once after it has been
+// fully indexed and saved (Stage="indexed"). Pass nil to disable reporting.
 type IndexProgress func(IndexProgressInfo)
 
 // IndexFolder indexes the images directly inside folderPath (non-recursive).
@@ -242,6 +251,19 @@ type indexProgressTracker struct {
 	sumElapsed time.Duration
 }
 
+func (t *indexProgressTracker) describing(imgPath string) {
+	if t == nil || t.cb == nil {
+		return
+	}
+	t.cb(IndexProgressInfo{
+		Stage:   "describing",
+		Folder:  t.folder,
+		Current: imgPath,
+		Done:    t.done,
+		Total:   t.total,
+	})
+}
+
 func (t *indexProgressTracker) record(imgPath string, imgElapsed time.Duration) {
 	if t == nil {
 		return
@@ -257,6 +279,7 @@ func (t *indexProgressTracker) record(imgPath string, imgElapsed time.Duration) 
 		eta = avg * time.Duration(t.total-t.done)
 	}
 	t.cb(IndexProgressInfo{
+		Stage:   "indexed",
 		Folder:  t.folder,
 		Current: imgPath,
 		Done:    t.done,
@@ -309,6 +332,7 @@ func (s *Service) indexFolder(ctx context.Context, folderPath string, tracker *i
 		}
 
 		imgStart := time.Now()
+		tracker.describing(imgPath)
 
 		imgCtx, imgCancel := context.WithTimeout(ctx, describeImageTimeout)
 		descResult, err := s.describer.Describe(imgCtx, imgPath)
