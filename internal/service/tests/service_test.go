@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/ramon-reichert/locallens/internal/service"
 	"github.com/ramon-reichert/locallens/internal/service/tests/testsboot"
@@ -16,9 +15,13 @@ import (
 const mustMatch = 2
 
 // Shared service and folder path, indexed once in TestMain.
+// indexProgressEvents captures every IndexProgress callback fired during
+// the TestMain index run, so TestIndexFolder can assert on the sequence
+// without paying for a second model load.
 var (
-	svc        *service.Service
-	testFolder string
+	svc                 *service.Service
+	testFolder          string
+	indexProgressEvents []service.IndexProgressInfo
 )
 
 // expectedSearchResults defines queries and their expected result ordering, for n topk results defined in mustMatch.
@@ -65,15 +68,16 @@ func TestMain(m *testing.M) {
 
 	fmt.Println("\n===== TEST MAIN > IndexFolder =====")
 
-	indexStart := time.Now()
-	count, err := svc.IndexFolder(ctx, testFolder, nil)
+	progress := func(p service.IndexProgressInfo) {
+		indexProgressEvents = append(indexProgressEvents, p)
+	}
+	count, err := svc.IndexFolder(ctx, testFolder, progress)
 	if err != nil {
 		fmt.Printf("index folder: %v\n", err)
 		os.Exit(1)
 	}
-	indexElapsed := time.Since(indexStart)
 
-	fmt.Printf("indexed %d images in %v (avg %v per image)\n=============\n\n", count, indexElapsed, indexElapsed/time.Duration(count))
+	fmt.Printf("\n===== TEST MAIN > IndexFolder completed with: %d indexed images =====\n\n", count)
 
 	code := m.Run()
 
@@ -102,6 +106,66 @@ func TestIndexFolder(t *testing.T) {
 	if _, err := os.Stat(indexFile); os.IsNotExist(err) {
 		t.Error("expected .locallens.index file inside the folder")
 	}
+
+	// Progress callback assertions — every image must fire exactly one
+	// "describing" event followed by one "indexed" event, in order, so the
+	// UI can show "Describing image X" before each describe call and then
+	// flip to "indexed" after the save.
+	//
+	// Done semantics:
+	//   - describing: count of images already fully indexed (this one not yet
+	//     done), so the first describing has Done == 0.
+	//   - indexed: count including this image, so the Nth indexed has Done == N.
+	wantEvents := 2 * count
+	if got := len(indexProgressEvents); got != wantEvents {
+		t.Fatalf("expected %d progress events (2 per image), got %d", wantEvents, got)
+	}
+
+	doneSoFar := 0
+	for i, p := range indexProgressEvents {
+		wantStage := "describing"
+		if i%2 == 1 {
+			wantStage = "indexed"
+		}
+		if p.Stage != wantStage {
+			t.Errorf("event %d: stage = %q, want %q", i, p.Stage, wantStage)
+		}
+		if p.Folder != testFolder {
+			t.Errorf("event %d: folder = %q, want %q", i, p.Folder, testFolder)
+		}
+		if p.Current == "" {
+			t.Errorf("event %d: empty Current path", i)
+		}
+		if p.Total != count {
+			t.Errorf("event %d: Total = %d, want %d", i, p.Total, count)
+		}
+
+		switch p.Stage {
+		case "describing":
+			if p.Done != doneSoFar {
+				t.Errorf("event %d (describing): Done = %d, want %d", i, p.Done, doneSoFar)
+			}
+			if p.ETA != 0 {
+				t.Errorf("event %d (describing): expected ETA == 0, got %v", i, p.ETA)
+			}
+		case "indexed":
+			if p.Done != doneSoFar+1 {
+				t.Errorf("event %d (indexed): Done = %d, want %d", i, p.Done, doneSoFar+1)
+			}
+			doneSoFar = p.Done
+			// ETA is set on every indexed event except the last (no remaining work).
+			if doneSoFar < count && p.ETA <= 0 {
+				t.Errorf("event %d (indexed): expected positive ETA before completion, got %v", i, p.ETA)
+			}
+			if doneSoFar == count && p.ETA != 0 {
+				t.Errorf("event %d (final indexed): expected ETA == 0, got %v", i, p.ETA)
+			}
+		}
+	}
+
+	if doneSoFar != count {
+		t.Errorf("final indexed Done = %d, want %d", doneSoFar, count)
+	}
 }
 
 func TestIndexPersistence(t *testing.T) {
@@ -120,7 +184,7 @@ func TestIndexPersistence(t *testing.T) {
 func TestSearch(t *testing.T) {
 	ctx := context.Background()
 
-	results, err := svc.Search(ctx, testFolder, "any image", 3, false)
+	results, err := svc.Search(ctx, testFolder, "any image", 3)
 	if err != nil {
 		t.Fatalf("search: %v", err)
 	}
@@ -141,7 +205,7 @@ func TestSearch(t *testing.T) {
 
 	// Request more than available returns all
 	totalImages := svc.IndexInfo(testFolder)
-	allResults, err := svc.Search(ctx, testFolder, "anything", totalImages+10, false)
+	allResults, err := svc.Search(ctx, testFolder, "anything", totalImages+10)
 	if err != nil {
 		t.Fatalf("search all: %v", err)
 	}
@@ -155,7 +219,7 @@ func TestSearchExpectedOrder(t *testing.T) {
 
 	for _, tc := range expectedSearchResults {
 		t.Run(tc.query, func(t *testing.T) {
-			results, err := svc.Search(ctx, testFolder, tc.query, mustMatch, false)
+			results, err := svc.Search(ctx, testFolder, tc.query, mustMatch)
 			if err != nil {
 				t.Fatalf("search: %v", err)
 			}
@@ -184,7 +248,7 @@ func TestSearchEmptyIndex(t *testing.T) {
 
 	emptyDir := t.TempDir()
 
-	results, err := svc.Search(ctx, emptyDir, "anything", 5, false)
+	results, err := svc.Search(ctx, emptyDir, "anything", 5)
 	if err != nil {
 		t.Fatalf("search: %v", err)
 	}

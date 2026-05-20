@@ -107,8 +107,7 @@ func (h *Handlers) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Folder    string `json:"folder"`
-		Recursive bool   `json:"recursive"`
+		Folder string `json:"folder"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -153,22 +152,14 @@ func (h *Handlers) handleIndex(w http.ResponseWriter, r *http.Request) {
 	// immediately. Without this, the browser blocks until the first body byte
 	// is sent, which can be 30+ seconds while the vision model loads — making
 	// the UI look frozen.
-	send(map[string]any{"type": "started", "folder": req.Folder, "recursive": req.Recursive})
+	send(map[string]any{"type": "started", "folder": req.Folder})
 
-	h.log(r.Context(), "handle index", "folder", req.Folder, "recursive", req.Recursive)
+	h.log(r.Context(), "handle index", "folder", req.Folder)
 
 	// r.Context() is cancelled when the client closes the connection (e.g.,
 	// the user hits Stop in the UI). The Service checks ctx.Done() between
 	// images and returns context.Canceled once the in-flight image completes.
-	var (
-		count int
-		err   error
-	)
-	if req.Recursive {
-		count, err = svc.IndexTree(r.Context(), req.Folder, progress)
-	} else {
-		count, err = svc.IndexFolder(r.Context(), req.Folder, progress)
-	}
+	count, err := svc.IndexFolder(r.Context(), req.Folder, progress)
 
 	switch {
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
@@ -202,12 +193,10 @@ func (h *Handlers) handleSearch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	recursive := r.URL.Query().Get("recursive") == "true"
-
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
 	defer cancel()
 
-	results, err := svc.Search(ctx, folder, query, k, recursive)
+	results, err := svc.Search(ctx, folder, query, k)
 	if err != nil {
 		h.log(r.Context(), "search error", "query", query, "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)

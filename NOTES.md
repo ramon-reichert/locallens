@@ -16,11 +16,8 @@
 
 # To-do:
 
-- Rethink the service flow according to the plan saved in agents.md under indexFolder durability and progress
-  - remove "include subfolders" from UI
-  - make UI atualize while and after describing each image (bottom logs and image thumb checkboxes) 
-  - atualize agents.md with changes implemented
 - Add some config values to the setup panel and make them configurable through the app;
+  - Does make sense to "embeed" the models within the release, excluding the downloading models flow? The llama libs would still have to be downloaded.
 - Think of make LocalLens service logic private and make the part related to Kronk public;
 - Check if the error with vulkan continues -> T-019dfff7-3572-72cc-bede-689295bad366
 - Release an MVP

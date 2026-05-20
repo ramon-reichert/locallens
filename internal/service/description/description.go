@@ -132,7 +132,7 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (DescribeRes
 	p := d.prompt
 	maxSide := d.maxSide
 
-	d.log(ctx, "\n=============\ndescribe image", "resize to", maxSide, "path", imagePath)
+	d.log(ctx, "describe image", "resize to", maxSide)
 
 	imageData, err := image.Resize(imagePath, maxSide)
 	if err != nil {
@@ -174,7 +174,7 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (DescribeRes
 		TokensPerSecond:    resp.Usage.TokensPerSecond,
 	}
 
-	d.log(ctx, "describe image", "elapsed time", time.Since(start), "description", result.Description+"\n=============\n")
+	d.log(ctx, "describe image", "elapsed time", time.Since(start), "description", result.Description)
 
 	return result, nil
 }

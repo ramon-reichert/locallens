@@ -3,7 +3,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -108,19 +107,13 @@ type IndexProgress func(IndexProgressInfo)
 // If progress is non-nil, it is invoked after each image is saved with a
 // running ETA. If ctx is cancelled, indexing returns ctx.Err() after the
 // in-flight image; all images saved up to that point are durable.
-//
-// For recursive indexing across a directory tree, use IndexTree, which loads
-// the vision model once and calls the same per-folder primitive for each
-// subdirectory containing images.
 func (s *Service) IndexFolder(ctx context.Context, folderPath string, progress IndexProgress) (int, error) {
 	total, err := s.countNewImages([]string{folderPath})
 	if err != nil {
 		return 0, err
 	}
 
-	// Nothing new to index — skip loading the vision model entirely. This is
-	// the common "user re-runs Index on an already-indexed folder" case, which
-	// otherwise pays a 30s+ vision-model load/unload for no work.
+	// Nothing new to index — skip loading the vision model entirely.
 	if total == 0 {
 		idx, err := s.loadIndex(folderPath)
 		if err != nil {
@@ -139,159 +132,15 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string, progress I
 		}
 	}()
 
-	tracker := &indexProgressTracker{cb: progress, total: total, folder: folderPath}
+	tracker := &indexProgressTracker{callback: progress, total: total, folder: folderPath}
 	return s.indexFolder(ctx, folderPath, tracker)
-}
-
-// IndexTree walks folderPath recursively and indexes every subdirectory
-// containing images. The vision model is loaded once before the walk and
-// unloaded after all folders are processed, so the load/unload cost is paid
-// once per user-initiated indexing action regardless of how many folders are
-// touched. Progress and cancellation behave the same as IndexFolder, with
-// Total spanning all subfolders.
-func (s *Service) IndexTree(ctx context.Context, folderPath string, progress IndexProgress) (int, error) {
-	folders, err := findImageFolders(folderPath)
-	if err != nil {
-		return 0, fmt.Errorf("find image folders: %w", err)
-	}
-
-	if len(folders) == 0 {
-		s.log(ctx, "no images found", "folder", folderPath)
-		return 0, nil
-	}
-
-	total, err := s.countNewImages(folders)
-	if err != nil {
-		return 0, err
-	}
-
-	// Sum the existing entries across all folders so we can return a useful
-	// count even when nothing new needs work.
-	indexed := 0
-	for _, dir := range folders {
-		idx, err := s.loadIndex(dir)
-		if err != nil {
-			return 0, err
-		}
-		indexed += idx.Len()
-	}
-
-	if total == 0 {
-		s.log(ctx, "index tree", "folder", folderPath, "indexed images", indexed, "new images", 0)
-		return indexed, nil
-	}
-
-	if err := s.describer.Load(ctx); err != nil {
-		return indexed, fmt.Errorf("load describer: %w", err)
-	}
-	defer func() {
-		if err := s.describer.Unload(ctx); err != nil {
-			s.log(ctx, "unload describer error", "error", err)
-		}
-	}()
-
-	tracker := &indexProgressTracker{cb: progress, total: total}
-
-	// Re-tally from scratch so the returned count reflects only what was
-	// processed in this call across the folders walked.
-	indexed = 0
-	var firstErr error
-	for _, dir := range folders {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			firstErr = ctxErr
-			break
-		}
-		tracker.folder = dir
-		n, err := s.indexFolder(ctx, dir, tracker)
-		indexed += n
-		if err != nil && firstErr == nil {
-			firstErr = err
-			// On cancellation, stop walking further folders.
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				break
-			}
-		}
-	}
-
-	return indexed, firstErr
-}
-
-// countNewImages returns the total number of images across the given folders
-// that are not yet present in their per-folder index. Used to compute the
-// Total field of IndexProgressInfo before starting work.
-func (s *Service) countNewImages(folders []string) (int, error) {
-	total := 0
-	for _, dir := range folders {
-		images, err := findImagesIn(dir)
-		if err != nil {
-			return 0, fmt.Errorf("find images in %q: %w", dir, err)
-		}
-		idx, err := s.loadIndex(dir)
-		if err != nil {
-			return 0, fmt.Errorf("load index %q: %w", dir, err)
-		}
-		for _, img := range images {
-			if _, exists := idx.Get(img); !exists {
-				total++
-			}
-		}
-	}
-	return total, nil
-}
-
-// indexProgressTracker accumulates per-image timing for ETA computation and
-// forwards progress to a user-supplied callback. Shared by IndexFolder (one
-// folder) and IndexTree (many folders) so the caller sees a single unified
-// counter regardless of how many folders are walked.
-type indexProgressTracker struct {
-	cb         IndexProgress
-	folder     string
-	total      int
-	done       int
-	sumElapsed time.Duration
-}
-
-func (t *indexProgressTracker) describing(imgPath string) {
-	if t == nil || t.cb == nil {
-		return
-	}
-	t.cb(IndexProgressInfo{
-		Stage:   "describing",
-		Folder:  t.folder,
-		Current: imgPath,
-		Done:    t.done,
-		Total:   t.total,
-	})
-}
-
-func (t *indexProgressTracker) record(imgPath string, imgElapsed time.Duration) {
-	if t == nil {
-		return
-	}
-	t.done++
-	t.sumElapsed += imgElapsed
-	if t.cb == nil {
-		return
-	}
-	var eta time.Duration
-	if t.done > 0 && t.total > t.done {
-		avg := t.sumElapsed / time.Duration(t.done)
-		eta = avg * time.Duration(t.total-t.done)
-	}
-	t.cb(IndexProgressInfo{
-		Stage:   "indexed",
-		Folder:  t.folder,
-		Current: imgPath,
-		Done:    t.done,
-		Total:   t.total,
-		ETA:     eta,
-	})
 }
 
 // indexFolder indexes the images directly inside folderPath. The vision model
 // must already be loaded; the embedder is kept loaded by the Service for the
-// app's lifetime. This is the single-folder primitive shared by IndexFolder
-// and IndexTree. The tracker (may be nil) is updated after each saved image.
+// app's lifetime. This is the per-folder primitive called by IndexFolder.
+// The tracker (may be nil) is updated before describe and after each saved
+// image.
 //
 // If ctx is cancelled, the loop returns ctx.Err() at the start of the next
 // iteration; images already saved remain durable.
@@ -334,6 +183,9 @@ func (s *Service) indexFolder(ctx context.Context, folderPath string, tracker *i
 		imgStart := time.Now()
 		tracker.describing(imgPath)
 
+		s.log(ctx, "\n::::::::::::")
+		s.log(ctx, "describe image", "path", imgPath)
+
 		imgCtx, imgCancel := context.WithTimeout(ctx, describeImageTimeout)
 		descResult, err := s.describer.Describe(imgCtx, imgPath)
 		imgCancel()
@@ -352,6 +204,8 @@ func (s *Service) indexFolder(ctx context.Context, folderPath string, tracker *i
 			continue
 		}
 
+		s.log(ctx, "save index with new described image", "path", imgPath)
+
 		idx.Add(index.Entry{
 			Path:        imgPath,
 			Description: descResult.Description,
@@ -367,7 +221,9 @@ func (s *Service) indexFolder(ctx context.Context, folderPath string, tracker *i
 		sumEmbedMS += float64(embedResult.Elapsed.Milliseconds())
 		described++
 
-		tracker.record(imgPath, time.Since(imgStart))
+		tracker.indexed(imgPath, time.Since(imgStart))
+
+		s.log(ctx, "::::::::::::")
 	}
 
 	total := idx.Len()
@@ -375,26 +231,100 @@ func (s *Service) indexFolder(ctx context.Context, folderPath string, tracker *i
 	// Log summary with timing breakdown from Kronk metrics.
 	if described > 0 {
 		n := float64(described)
-		s.log(ctx, "index folder",
+		elapsed := time.Since(start)
+		s.log(ctx, "\n=============\nindex folder",
 			"folder", folderPath,
-			"indexed images", total,
-			"described", described,
-			"avg ttft ms", sumTTFT/n,
-			"avg tok/s", sumTPS/n,
-			"avg embed ms", sumEmbedMS/n,
-			"elapsed time", time.Since(start))
+			"\nindexed images", total,
+			"\ndescribed", described,
+			"\navg ttft ms", sumTTFT/n,
+			"\navg tok/s", sumTPS/n,
+			"\navg embed ms", sumEmbedMS/n,
+			"\nelapsed time", elapsed,
+			"\navg time/img", elapsed/time.Duration(n))
 	} else {
-		s.log(ctx, "\n=============\nindex folder", "folder", folderPath, "indexed images", total, "elapsed time", time.Since(start))
+		s.log(ctx, "\n=============\nindex folder", "folder", folderPath, "\nindexed images", total, "\nelapsed time", time.Since(start))
 	}
 
 	return total, nil
 }
 
+// countNewImages returns the total number of images across the given folders
+// that are not yet present in their per-folder index. Used to compute the
+// Total field of IndexProgressInfo before starting work.
+func (s *Service) countNewImages(folders []string) (int, error) {
+	total := 0
+	for _, dir := range folders {
+		images, err := findImagesIn(dir)
+		if err != nil {
+			return 0, fmt.Errorf("find images in %q: %w", dir, err)
+		}
+		idx, err := s.loadIndex(dir)
+		if err != nil {
+			return 0, fmt.Errorf("load index %q: %w", dir, err)
+		}
+		for _, img := range images {
+			if _, exists := idx.Get(img); !exists {
+				total++
+			}
+		}
+	}
+	return total, nil
+}
+
+// indexProgressTracker accumulates per-image timing for ETA computation and
+// forwards progress to a user-supplied callback. Created once per IndexFolder
+// call with a fixed folder, total, and progress callback.
+type indexProgressTracker struct {
+	callback   IndexProgress
+	folder     string
+	total      int
+	done       int
+	sumElapsed time.Duration
+}
+
+func (t *indexProgressTracker) describing(imgPath string) {
+	if t == nil || t.callback == nil {
+		return
+	}
+	t.callback(IndexProgressInfo{
+		Stage:   "describing",
+		Folder:  t.folder,
+		Current: imgPath,
+		Done:    t.done,
+		Total:   t.total,
+	})
+}
+
+func (t *indexProgressTracker) indexed(imgPath string, imgElapsed time.Duration) {
+	if t == nil {
+		return
+	}
+	t.done++
+	t.sumElapsed += imgElapsed
+	if t.callback == nil {
+		return
+	}
+	var eta time.Duration
+	if t.done > 0 && t.total > t.done {
+		avg := t.sumElapsed / time.Duration(t.done)
+		eta = avg * time.Duration(t.total-t.done)
+	}
+	t.callback(IndexProgressInfo{
+		Stage:   "indexed",
+		Folder:  t.folder,
+		Current: imgPath,
+		Done:    t.done,
+		Total:   t.total,
+		ETA:     eta,
+	})
+}
+
 // Search finds images similar to the query text in the given folder.
 // The folder must have been indexed first.
-// If recursive is true, it searches across all indexed subfolders.
-func (s *Service) Search(ctx context.Context, folderPath string, query string, k int, recursive bool) ([]search.Result, error) {
-	s.log(ctx, "search images", "folder", folderPath, "top k", k, "recursive", recursive, "query", query)
+func (s *Service) Search(ctx context.Context, folderPath string, query string, k int) ([]search.Result, error) {
+
+	s.log(ctx, "\n::::::::::::")
+	s.log(ctx, "search images", "folder", folderPath, "top k", k, "query", query)
 
 	embedCtx, embedCancel := context.WithTimeout(ctx, embedTimeout)
 	embedResult, err := s.embedder.Embed(embedCtx, query)
@@ -404,54 +334,28 @@ func (s *Service) Search(ctx context.Context, folderPath string, query string, k
 	}
 	queryVec := embedResult.Embedding
 
-	var allEntries []search.Entry
-
-	if recursive {
-		// Walk all subdirectories and collect entries from each cached index.
-		// Folders without an on-disk index file are skipped to avoid polluting
-		// the cache with empty entries for un-indexed directories.
-		filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
-			if err != nil || !info.IsDir() {
-				return nil
-			}
-			if _, statErr := os.Stat(indexPathFor(path)); os.IsNotExist(statErr) {
-				return nil
-			}
-
-			idx, loadErr := s.loadIndex(path)
-			if loadErr != nil {
-				return nil
-			}
-
-			for _, e := range idx.All() {
-				allEntries = append(allEntries, search.Entry{
-					Path:        e.Path,
-					Description: e.Description,
-					Embedding:   e.Embedding,
-				})
-			}
-			return nil
-		})
-	} else {
-		idx, err := s.loadIndex(folderPath)
-		if err != nil {
-			return nil, fmt.Errorf("load index: %w", err)
-		}
-
-		for _, e := range idx.All() {
-			allEntries = append(allEntries, search.Entry{
-				Path:        e.Path,
-				Description: e.Description,
-				Embedding:   e.Embedding,
-			})
-		}
+	idx, err := s.loadIndex(folderPath)
+	if err != nil {
+		return nil, fmt.Errorf("load index: %w", err)
 	}
 
-	if len(allEntries) == 0 {
+	entries := idx.All()
+	if len(entries) == 0 {
 		return nil, nil
 	}
 
-	return search.FindTopK(queryVec, allEntries, k), nil
+	searchEntries := make([]search.Entry, 0, len(entries))
+	for _, e := range entries {
+		searchEntries = append(searchEntries, search.Entry{
+			Path:        e.Path,
+			Description: e.Description,
+			Embedding:   e.Embedding,
+		})
+	}
+
+	s.log(ctx, "::::::::::::")
+
+	return search.FindTopK(queryVec, searchEntries, k), nil
 }
 
 // IndexInfo returns the number of indexed images in a folder.
@@ -533,34 +437,6 @@ func findImagesIn(folderPath string) ([]string, error) {
 		}
 	}
 	return images, nil
-}
-
-// findImageFolders walks rootPath and returns every directory that contains at
-// least one image file directly inside it. Used by IndexTree to enumerate the
-// folders that need a per-folder .locallens.index.
-func findImageFolders(rootPath string) ([]string, error) {
-	seen := make(map[string]bool)
-	var folders []string
-
-	err := filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			return nil
-		}
-		if !isImageExt(filepath.Ext(path)) {
-			return nil
-		}
-		dir := filepath.Dir(path)
-		if !seen[dir] {
-			seen[dir] = true
-			folders = append(folders, dir)
-		}
-		return nil
-	})
-
-	return folders, err
 }
 
 func isImageExt(ext string) bool {

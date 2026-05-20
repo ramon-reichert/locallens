@@ -108,7 +108,7 @@ func TestSimilarity(t *testing.T) {
 	for _, query := range testQueries {
 		fmt.Printf("\nQuery: %q\n", query)
 
-		results, err := svc.Search(ctx, tmp, query, len(entries), false)
+		results, err := svc.Search(ctx, tmp, query, len(entries))
 		if err != nil {
 			t.Errorf("search %q: %v", query, err)
 			continue

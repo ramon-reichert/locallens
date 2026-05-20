@@ -150,18 +150,33 @@ vector := resp.Data[0].Embedding  // []float32
 
 ### Model lifecycle
 
-Models are loaded on demand and unloaded after each phase. This is critical
-for low-RAM machines where holding both vision (~935 MB) and embedding models
-simultaneously would cause memory pressure:
+The two models have different lifetimes by design:
+
+- **Embedder** (~320 MB) — loaded once at `service.New()` (app startup) and
+  kept resident for the lifetime of the `Service`. Every Search needs it to
+  vectorize the query, and indexing reuses it to embed each description.
+  Holding it costs ~320 MB but eliminates repeated load/unload overhead.
+- **Vision model** (~935 MB) — loaded at the start of each `IndexFolder` call
+  and unloaded (via `defer`) when the call returns. It is only needed during
+  indexing, and is too large to hold permanently on low-RAM machines.
 
 ```
-service.IndexFolder:
-  → describer.Load()     # Load vision model
-  → describe all images
-  → describer.Unload()   # Free vision model memory
-  → embedder.Load()      # Load embedding model
-  → embed all descriptions
-  → embedder.Unload()    # Free embedding model memory
+service.New(ctx):
+  → embedder.Load()          # stays loaded for app lifetime
+
+service.IndexFolder(ctx, folderPath, progress):
+  → countNewImages           # skip-already-indexed pre-pass
+  → (short-circuit if none)  # avoids paying any model cost
+  → describer.Load()         # vision model
+  → for each new image:
+      describer.Describe()   # vision: image → text
+      embedder.Embed()       # embedder is already loaded
+      index.Add() + Save()   # durable per-image
+  → describer.Unload()       # via defer, even on cancellation
+
+service.Close(ctx):
+  → describer.Unload()
+  → embedder.Unload()
 ```
 
 ### Hardware detection
@@ -209,21 +224,36 @@ Key observations:
 
 ## How the pipeline works
 
-```
-Image file
-  → image.Resize(path, maxSide)        # Resize to maxSide px, JPEG encode
-  → description.Describe(ctx, path)    # Vision model: image → text description
-  → embedding.Embed(ctx, description)  # Embedding model: text → float32 vector
-  → index.Add(Entry{Path, Description, Embedding})
-  → index.Save()                       # Write .locallens.index in the folder
+Indexing processes a single folder (non-recursive). For each image not already
+in the folder's `.locallens.index`, the full describe → embed → save cycle
+runs end-to-end before moving to the next image, so a crash mid-run loses at
+most the in-flight image.
 
-Search query
-  → embedding.Embed(ctx, query)        # Query text → vector
-  → search.FindTopK(queryVec, entries, k)  # Cosine similarity ranking
+```
+service.IndexFolder(ctx, folderPath, progress):
+  for each new image:
+    → image.Resize(path, maxSide)        # Resize to maxSide px, JPEG encode
+    → description.Describe(ctx, path)    # Vision model: image → text
+    → embedding.Embed(ctx, description)  # Embedder: text → []float32
+    → index.Add(Entry{Path, Description, Embedding})
+    → index.Save()                       # Write .locallens.index in the folder
+    → tracker.record(...)                # Progress callback (SSE event)
+
+service.Search(ctx, folderPath, query, k):
+  → loadIndex(folderPath)                # Cached after first call; disk hit
+                                         # only on cache miss
+  → embedding.Embed(ctx, query)          # Query text → vector
+  → search.FindTopK(queryVec, entries, k)# Cosine similarity ranking
 ```
 
-Models are loaded/unloaded between phases to avoid holding both in memory
-simultaneously (important for low-RAM machines).
+The embedder is always loaded (see Model lifecycle), so search is just one
+embed call plus an in-memory similarity pass on cached entries. The vision
+model is loaded once per `IndexFolder` call and unloaded via `defer` on the
+way out — including on cancellation.
+
+Recursive indexing across a directory tree is not currently supported and is
+a planned future step. The Service exposes a single public indexing method,
+`IndexFolder`.
 
 ## Browser UI decisions
 
@@ -244,7 +274,12 @@ Key implementation decisions:
 - **Embedded static files**: `go:embed` in `cmd/locallens/` for single-binary
   distribution.
 - **Standard library routing**: `http.ServeMux`, no third-party router.
-- **SSE for progress**: Setup download status streamed via Server-Sent Events.
+- **SSE for progress**: Setup downloads and folder indexing both stream
+  progress to the browser via Server-Sent Events. The `/api/index` endpoint
+  uses the request context for cancellation — when the user clicks Stop, the
+  frontend `AbortController` closes the connection, cancelling `r.Context()`
+  on the server and stopping indexing after the in-flight image (already-saved
+  progress is preserved).
 - **CGO_ENABLED=0**: The entire stack avoids CGO (Kronk SDK uses FFI, not cgo).
 - **503 pattern**: Handlers return `setup_required` when `Service` is nil;
   frontend opens the setup modal.
@@ -263,117 +298,79 @@ experience. The same HTML/JS frontend works inside Wails with minimal changes,
 gaining native dialogs, single-click launch, and better filesystem access.
 Migration is deferred until the browser UI stabilizes.
 
-## Future refactor: IndexFolder durability and progress
+## Indexing: durability, progress, and cancellation
 
-The current `IndexFolder` (service.go) batches all work in memory across two
-phases (describe all → embed all) and only saves at the end. A crash mid-run
-loses all progress. The following plan addresses durability, progress reporting,
-and cancellation. Each step builds on the previous — implement in order.
+The indexing pipeline is built around four properties:
 
-### Step 1 — Keep the embedding model loaded
+1. **Always-loaded embedder, on-demand vision model** — see Model lifecycle.
+2. **In-memory index cache** — `Service.indexes` (`map[string]*index.Index`,
+   guarded by `sync.RWMutex`) caches the `.locallens.index` deserialized from
+   each folder. First search hits disk; subsequent searches and re-indexes
+   on the same folder are pure in-memory. Because `idx.Add()`/`idx.Save()`
+   mutate the cached pointer in place, no separate cache-write step is needed
+   after indexing — the cache stays consistent automatically.
+3. **Per-image durability** — `indexFolder()` runs describe → embed →
+   `idx.Add` → `idx.Save` for each image. A crash mid-run loses at most the
+   in-flight image. On resume, `idx.Get(imgPath)` short-circuits already-saved
+   entries.
+4. **Connection-bound cancellation** — `/api/index` is SSE. The handler passes
+   `r.Context()` to `Service.IndexFolder`. When the user clicks Stop, the
+   frontend `AbortController` closes the connection, which cancels the server
+   context. `indexFolder()` checks `ctx.Err()` at the top of every image
+   iteration and returns `ctx.Err()` as soon as the in-flight image completes
+   (and saves). No separate cancel endpoint needed.
 
-The embedding model (embeddinggemma-300m) is ~320 MB — small enough to stay
-loaded for the lifetime of the `Service`. Search is the primary use case of
-the app and may run many times per session; each Search needs the embedder to
-vectorize the query. Keeping it always loaded avoids repeated load/unload
-costs for every search. As a secondary benefit, it enables per-image
-embed-after-describe during indexing (Step 4).
+### Progress reporting
 
-**Changes:**
-- `Service.New()`: call `embedder.Load()` at construction time.
-- `Service.Close()`: unload the embedder (already does this).
-- Remove `embedder.Load()`/`Unload()` calls from `IndexFolder` and `Search`.
-- Remove the `IsLoaded()` guard in `Search` — it's always loaded.
+`Service.IndexFolder` accepts an `IndexProgress` callback (`func(IndexProgressInfo)`),
+invoked at two stages per image:
 
-### Step 2 — Cache loaded indexes in memory
+- `Stage: "describing"` — fired right before the vision-model call. Used to
+  show "Describing image X/N — file.jpg" in the UI status. ETA is not set
+  (no timing data yet).
+- `Stage: "indexed"` — fired after `idx.Save()`. Increments the running
+  counter and computes a running-average ETA over completed images. Used to
+  advance the progress bar and flip the per-file ✅ marker.
 
-Currently `Search` re-reads every `.locallens.index` file from disk on every
-call, deserializes all entries, runs cosine similarity, then discards
-everything. With the embedder always loaded (Step 1), the remaining cost per
-search is disk I/O — eliminate it with an in-memory cache.
+`IndexProgressInfo` fields: `Stage`, `Folder`, `Current`, `Done`, `Total`, `ETA`.
 
-**Changes:**
-- Add a `map[string]*index.Index` field to `Service` (protected by the
-  existing mutex pattern or a dedicated `sync.RWMutex`).
-- On first search of a folder, load from disk and cache. Subsequent searches
-  read directly from memory.
-- When `IndexFolder` saves an index, update the cache for that folder (the
-  Service already knows — it calls `idx.Save()`).
-- Memory cost is negligible: each entry is a path + description + `[]float32`
-  embedding (~1-2 KB per image). 10,000 images ≈ ~15-20 MB, small next to the
-  320 MB embedder already in memory.
+`Total` is computed upfront by `countNewImages()`, which walks the folder's
+image list and excludes entries already present in the cached index. When
+`Total == 0` the function short-circuits before loading the vision model —
+re-running Index on an already-indexed folder is nearly instant (~ms, not 30s).
 
-After Steps 1-2, Search becomes: embed query (one model call) → cosine
-similarity over cached vectors → return results. No disk I/O for repeat
-searches.
+### SSE event types on `/api/index`
 
-### Step 3 — Bound IndexFolder to a single folder
+The handler in [`handleIndex`](file:///b:/dev/locallens/internal/app/handlers.go)
+emits the following JSON events:
 
-Currently `IndexFolder` handles recursion internally, grouping images by folder.
-Move the recursive walk up to the caller (handler layer) so each `IndexFolder`
-call processes exactly one folder. This makes each call a smaller, self-contained
-unit of work.
+| Event       | When                                       | Payload fields                              |
+|-------------|--------------------------------------------|---------------------------------------------|
+| `started`   | Immediately, before any work               | `folder`                                    |
+| `progress`  | Per image, twice (describing + indexed)    | `stage`, `folder`, `current`, `done`, `total`, `etaMs` |
+| `done`      | All work finished successfully             | `count`                                     |
+| `cancelled` | Context cancelled (user Stop)              | `count`                                     |
+| `error`     | Any other error                            | `error`, `count`                            |
 
-**Changes:**
-- Remove the `recursive` parameter and all subfolder logic from `IndexFolder`.
-  It processes only the images directly inside `folderPath`.
-- Add a new method or helper at the handler/caller level that walks subdirectories
-  and calls `IndexFolder` once per folder.
-- This wrapper also handles the vision model lifecycle: load once before the
-  loop, unload after all folders are processed, so the load/unload cost is
-  paid once per user-initiated indexing action, not once per folder.
-- Each per-folder call loads one index, processes images, saves, and returns —
-  crash-safe at folder granularity.
+The `started` event is sent before the (slow) vision-model load specifically
+so the browser's `await fetch(...)` resolves immediately and the UI can show
+"Loading vision model..." rather than appearing frozen.
 
-### Step 4 — Save index after each image
+### Future: recursive indexing
 
-With the embedder always loaded (Step 1) and single-folder scope (Step 3),
-the describe→embed→save cycle can run per image instead of per batch.
+`IndexFolder` is currently the only public indexing entry point and processes
+exactly one folder. Recursion was removed during cleanup because the UI no
+longer exposes it. When it returns, the natural shape is:
 
-**Changes:**
-- In `IndexFolder`, for each new image:
-  1. Describe (vision model).
-  2. Embed the description (embedder is already loaded).
-  3. Add entry to the in-memory index.
-  4. Save the index to disk.
-- Remove the `descriptions` map — no intermediate accumulation needed.
-- The vision model still loads once at the start and unloads at the end of
-  `IndexFolder`, but each image's work is durable as soon as it completes.
-- If the app crashes after image N, images 1..N are persisted. On restart,
-  the existing-entry skip logic (`indexes[dir].Get(imgPath)`) resumes from N+1.
+- Extract a private `indexFolders(ctx, []string, progress)` helper from the
+  body of `IndexFolder` (the count/short-circuit/load/defer/loop plumbing).
+- Add `IndexTree(ctx, root, progress)` that calls `findImageFolders(root)`
+  (a `filepath.Walk` that returns every directory containing image files),
+  then delegates to `indexFolders`.
+- `IndexFolder` becomes a one-liner: `s.indexFolders(ctx, []string{folderPath}, progress)`.
 
-### Step 5 — Metrics, ETA, and cancellation
-
-With per-image granularity (Step 4), add progress reporting and cancellation.
-
-**Metrics and ETA:**
-- Collect TTFT, tok/s, and embed time per image as today, but compute a
-  running average after each image.
-- Calculate ETA: `avgTimePerImage × remainingImages`.
-- Report progress to the caller via a callback (similar to `SetupProgress`):
-  image count, percent complete, ETA, current file name.
-- The handler layer forwards this to the frontend via SSE (same pattern as
-  `handleSetupRun`).
-
-**Cancellation:**
-- Check `ctx.Done()` at the top of each image iteration. If cancelled, save
-  the index (already saved per-image from Step 4) and return early with the
-  count of images processed so far.
-- The handler layer wires a cancellable context to an API endpoint (e.g.,
-  `POST /api/index/cancel`) or ties it to the SSE connection closing.
-- The frontend shows a "Stop" button during indexing that hits the cancel
-  endpoint. Progress up to that point is preserved.
-
-### Design constraints
-
-- **Vision model lifecycle**: The vision model (~935 MB) must still load/unload
-  per `IndexFolder` call. Do not keep it loaded across calls.
-- **Index format**: No schema changes needed. `index.Entry` already has
-  `Description` and `Embedding` fields. Partial entries (description without
-  embedding) are not stored — Step 4 ensures both are present before saving.
-- **No image file modification**: Descriptions live only in the per-folder
-  `.locallens.index` file. Do not write metadata to image files or create
-  sidecar files.
+This keeps the vision-model-loaded-once-per-action property and avoids
+duplicating the plumbing that exists today.
 
 ## Known issues and gotchas
 
