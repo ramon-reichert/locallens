@@ -83,17 +83,40 @@ func run() error {
 func setupStatus() app.SetupStatusInfo {
 	c, _ := config.Load()
 	return app.SetupStatusInfo{
-		BasePath:    c.BasePath,
-		DefaultPath: config.DefaultBasePath(),
+		BasePath:          c.BasePath,
+		DefaultPath:       config.DefaultBasePath(),
+		Processor:         c.Processor,
+		DetectedProcessor: kronk.DetectedProcessor(),
+		ActiveProcessor:   kronk.ActiveProcessor(),
 	}
 }
 
 // setupRunner orchestrates the full setup flow: install llama.cpp libraries,
 // initialize the Kronk SDK, download models, and create the service.
 // Progress is reported to the caller via SSE through the progress callback.
-func setupRunner(ctx context.Context, log logger.Logger, basePath string, progress app.SetupProgress) (*service.Service, error) {
+//
+// The Kronk SDK loads the llama.cpp shared library exactly once per process,
+// so when the chosen processor differs from the one already resident in this
+// process, setupRunner installs the new libs and saves config but skips the
+// in-process Service rebuild — the new backend only takes effect on the
+// next launch. In that case it returns (nil, nil) after emitting a
+// "restart_required" progress event.
+func setupRunner(ctx context.Context, log logger.Logger, req app.SetupRequest, progress app.SetupProgress) (*service.Service, error) {
 	cfg, _ := config.Load()
-	cfg.BasePath = basePath
+
+	// Remember what was persisted so we can decide whether the new
+	// request changes the processor field in config.json.
+	savedProcessor := cfg.Processor
+
+	cfg.BasePath = req.BasePath
+	cfg.Processor = req.Processor
+
+	// Any processor change in the saved config requires a restart, because
+	// the Kronk SDK can't swap llama.cpp libraries mid-process. We don't
+	// compare against the active runtime here because a user who already
+	// changed processor in a prior session (without restarting) would
+	// otherwise see an inconsistent UI.
+	processorSwitch := req.Processor != "" && req.Processor != savedProcessor
 
 	progress("libs", "downloading")
 	if err := kronk.InstallDependencies(ctx, log, cfg); err != nil {
@@ -112,6 +135,15 @@ func setupRunner(ctx context.Context, log logger.Logger, basePath string, progre
 		return nil, err
 	}
 	progress("models", "complete")
+
+	if processorSwitch {
+		if err := config.Save(cfg); err != nil {
+			progress("save", "error: "+err.Error())
+			return nil, err
+		}
+		progress("restart_required", "Restart LocalLens to apply the processor change.")
+		return nil, nil
+	}
 
 	progress("service", "initializing")
 	svc, err := initService(ctx, log, cfg)

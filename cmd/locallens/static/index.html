@@ -52,9 +52,6 @@
         <div class="modal-backdrop"></div>
         <div class="modal-content">
             <h2>Setup</h2>
-            <div id="setup-warning" class="setup-warning hidden">
-                Setup is required before you can index or search images.
-            </div>
             <p class="setup-text">
                 LocalLens needs to download AI models to analyze and search your images locally.
                 All processing happens on your machine — nothing is sent to the cloud.
@@ -70,6 +67,14 @@
                     <button id="setup-browse-btn" type="button">Browse</button>
                 </div>
             </div>
+            <div class="setup-field">
+                <label for="setup-processor">Processor</label>
+                <select id="setup-processor"></select>
+                <p class="setup-hint">
+                    Hardware backend used by the AI models. Auto-detected from your machine.
+                    Switch to <strong>cpu</strong> if the GPU backend is unstable or runs out of memory.
+                </p>
+            </div>
             <div id="folder-picker" class="folder-picker hidden">
                 <div id="folder-picker-tree" class="folder-picker-tree"></div>
                 <div class="folder-picker-actions">
@@ -81,8 +86,7 @@
                 <div id="setup-progress-text"></div>
             </div>
             <div class="setup-actions">
-                <button id="setup-download-btn">Download &amp; Install</button>
-                <button id="setup-close-btn">Close</button>
+                <button id="setup-action-btn">Download &amp; Install</button>
             </div>
         </div>
     </div>

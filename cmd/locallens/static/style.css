@@ -405,7 +405,8 @@ button:disabled {
     color: #8888aa;
 }
 
-.setup-field input {
+.setup-field input,
+.setup-field select {
     padding: 8px 10px;
     border: 1px solid #0f3460;
     border-radius: 4px;
@@ -414,9 +415,17 @@ button:disabled {
     font-size: 13px;
 }
 
-.setup-field input:focus {
+.setup-field input:focus,
+.setup-field select:focus {
     outline: none;
     border-color: #00d9ff;
+}
+
+.setup-hint {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: #8888aa;
+    line-height: 1.4;
 }
 
 .setup-progress {

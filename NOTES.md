@@ -20,7 +20,7 @@
   - Does make sense to "embeed" the models within the release, excluding the downloading models flow? The llama libs would still have to be downloaded.
 - Think of make LocalLens service logic private and make the part related to Kronk public;
 - Check if the error with vulkan continues -> T-019dfff7-3572-72cc-bede-689295bad366
-- Release an MVP
+- Release an MVP -> GoReleaser
 
 - Test performance with cpu vs vulkan
 - Adjust embedding flow to be more accurate;

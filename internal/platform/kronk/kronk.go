@@ -9,6 +9,7 @@ import (
 
 	"github.com/ardanlabs/kronk/sdk/kronk"
 	"github.com/ardanlabs/kronk/sdk/tools/defaults"
+	"github.com/ardanlabs/kronk/sdk/tools/devices"
 	"github.com/ardanlabs/kronk/sdk/tools/libs"
 	"github.com/ardanlabs/kronk/sdk/tools/models"
 
@@ -22,6 +23,20 @@ type ModelPaths struct {
 	Embed  config.ModelFilePaths
 }
 
+// activeProcessor records the processor name that was actually loaded into
+// the process by the first successful kronk.Init call. The Kronk SDK loads
+// the llama.cpp shared library exactly once per process and short-circuits
+// subsequent Init calls, so this value cannot change at runtime — switching
+// processors requires restarting the binary.
+var activeProcessor string
+
+// ActiveProcessor returns the processor backend currently resident in the
+// process (e.g. "cuda", "vulkan", "cpu"), or "" if Kronk has not been
+// initialized yet.
+func ActiveProcessor() string {
+	return activeProcessor
+}
+
 // Init initializes the Kronk SDK runtime. Must be called before loading
 // any models. When cfg.Processor (or KRONK_PROCESSOR) selects a backend,
 // the corresponding library path is pinned so the runtime does not auto-
@@ -29,7 +44,15 @@ type ModelPaths struct {
 func Init(cfg config.Config) error {
 	processor := resolveProcessor(cfg)
 	if processor == "" {
-		return kronk.Init()
+		if err := kronk.Init(); err != nil {
+			return err
+		}
+		// kronk.Init with no opts resolves the lib path via
+		// defaults.Processor(""), which falls back to "cpu".
+		if activeProcessor == "" {
+			activeProcessor = "cpu"
+		}
+		return nil
 	}
 
 	p, err := defaults.Processor(processor)
@@ -42,7 +65,13 @@ func Init(cfg config.Config) error {
 		return fmt.Errorf("llama.cpp libs new: %w", err)
 	}
 
-	return kronk.Init(kronk.WithLibPath(libsys.LibsPath()))
+	if err := kronk.Init(kronk.WithLibPath(libsys.LibsPath())); err != nil {
+		return err
+	}
+	if activeProcessor == "" {
+		activeProcessor = processor
+	}
+	return nil
 }
 
 // InstallDependencies downloads llama.cpp libraries, templates, and catalog.
@@ -86,6 +115,14 @@ func resolveProcessor(cfg config.Config) string {
 		return v
 	}
 	return cfg.Processor
+}
+
+// DetectedProcessor returns the processor name Kronk has auto-detected for
+// the current machine (e.g. "cuda", "vulkan", "metal", "rocm", or "cpu").
+// It is a thin pass-through to the Kronk SDK so the SDK boundary stays
+// inside this package.
+func DetectedProcessor() string {
+	return devices.DetectGPU().String()
 }
 
 // ResolvePaths resolves the file paths for already-downloaded models.

@@ -31,13 +31,12 @@ const fileList = document.getElementById("file-list");
 const setupBtn = document.getElementById("setup-btn");
 const setupBadge = document.getElementById("setup-badge");
 const setupModal = document.getElementById("setup-modal");
-const setupWarning = document.getElementById("setup-warning");
 const setupPath = document.getElementById("setup-path");
-const setupDownloadBtn = document.getElementById("setup-download-btn");
-const setupCloseBtn = document.getElementById("setup-close-btn");
+const setupActionBtn = document.getElementById("setup-action-btn");
 const setupProgress = document.getElementById("setup-progress");
 const setupProgressText = document.getElementById("setup-progress-text");
 const setupBrowseBtn = document.getElementById("setup-browse-btn");
+const setupProcessor = document.getElementById("setup-processor");
 const folderPicker = document.getElementById("folder-picker");
 const folderPickerTree = document.getElementById("folder-picker-tree");
 const folderPickerSelect = document.getElementById("folder-picker-select");
@@ -55,12 +54,16 @@ searchInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") doSearch();
 });
 setupBtn.addEventListener("click", () => openSetup(false));
-setupCloseBtn.addEventListener("click", closeSetup);
 setupModal.querySelector(".modal-backdrop").addEventListener("click", closeSetup);
-setupDownloadBtn.addEventListener("click", runSetup);
+setupActionBtn.addEventListener("click", onSetupAction);
+setupPath.addEventListener("input", updateSetupActionButton);
+setupProcessor.addEventListener("change", updateSetupActionButton);
 setupBrowseBtn.addEventListener("click", openFolderPicker);
 folderPickerSelect.addEventListener("click", () => {
-    if (pickerSelectedPath) setupPath.value = pickerSelectedPath;
+    if (pickerSelectedPath) {
+        setupPath.value = pickerSelectedPath;
+        updateSetupActionButton();
+    }
     folderPicker.classList.add("hidden");
 });
 folderPickerCancel.addEventListener("click", () => folderPicker.classList.add("hidden"));
@@ -80,12 +83,38 @@ async function checkSetupStatus() {
         const data = await res.json();
         state.setupComplete = data.complete;
         setupPath.value = data.basePath || data.defaultPath || "";
+        populateProcessorOptions(data.detectedProcessor || "cpu", data.processor || "");
+
+        // Snapshot the saved values so the action button can detect edits.
+        state.savedBasePath = setupPath.value;
+        state.savedProcessor = setupProcessor.value;
+        // The processor backend currently loaded in this process. It can
+        // only change by restarting the binary.
+        state.activeProcessor = data.activeProcessor || "";
+
         updateSetupBadge();
+        updateSetupActionButton();
 
         if (!data.complete) {
             openSetup(false);
         }
     } catch {}
+}
+
+// All processor backends supported by yzma/llama.cpp.
+const PROCESSOR_OPTIONS = ["cuda", "vulkan", "metal", "rocm", "cpu"];
+
+function populateProcessorOptions(detected, saved) {
+    setupProcessor.innerHTML = "";
+    for (const value of PROCESSOR_OPTIONS) {
+        const el = document.createElement("option");
+        el.value = value;
+        el.textContent = value === detected ? `${value} (auto-detected)` : value;
+        setupProcessor.appendChild(el);
+    }
+
+    // Prefer the saved (config.json) value, fall back to the detected default.
+    setupProcessor.value = PROCESSOR_OPTIONS.includes(saved) ? saved : detected;
 }
 
 function updateSetupBadge() {
@@ -98,22 +127,99 @@ function updateSetupBadge() {
     }
 }
 
-function openSetup(showWarning) {
-    setupWarning.classList.toggle("hidden", !showWarning);
-    setupDownloadBtn.disabled = false;
-
-    if (state.setupComplete) {
-        setupProgressText.textContent = "Setup complete. You can close this panel.";
-        setupProgress.classList.remove("hidden");
-    } else {
-        setupProgress.classList.add("hidden");
+function openSetup() {
+    // Don't stomp on a restart-required message that's already in flight.
+    if (!state.restartPending) {
+        setupProgressText.textContent = state.setupComplete
+            ? "Setup complete. You can close this panel."
+            : "Setup is required before you can index or search images.";
     }
+    setupProgress.classList.remove("hidden");
 
+    updateSetupActionButton();
     setupModal.classList.remove("hidden");
 }
 
 function closeSetup() {
     setupModal.classList.add("hidden");
+}
+
+// hasPendingChanges reports whether the form values differ from what's
+// currently saved in config.json. Used to force a re-run of setup so the
+// new basePath/processor actually take effect.
+function hasPendingChanges() {
+    return (
+        setupPath.value.trim() !== (state.savedBasePath || "") ||
+        setupProcessor.value !== (state.savedProcessor || "")
+    );
+}
+
+// processorSwitchRequiresRestart returns true when the user picked a
+// processor different from the one currently saved in config.json. Any
+// change to the persisted processor requires a restart because the Kronk
+// SDK can't swap llama.cpp libraries mid-process.
+function processorSwitchRequiresRestart() {
+    const saved = state.savedProcessor || "";
+    return setupProcessor.value && setupProcessor.value !== saved;
+}
+
+// updateSetupActionButton flips the single action button between
+// "Close" (no work needed), the setup-running label (work needed), a
+// restart-required label (processor switch requested), and "Quit" once
+// the server has confirmed the restart is required.
+function updateSetupActionButton() {
+    if (state.restartPending) {
+        setupActionBtn.textContent = "Quit LocalLens";
+        setupActionBtn.dataset.action = "quit";
+        return;
+    }
+
+    const pending = hasPendingChanges();
+    const needsRun = !state.setupComplete || pending;
+
+    if (!needsRun) {
+        setupActionBtn.textContent = "Close";
+        setupActionBtn.dataset.action = "close";
+        return;
+    }
+
+    if (state.setupComplete && processorSwitchRequiresRestart()) {
+        setupActionBtn.textContent = "Install & Save (restart required)";
+        setupActionBtn.dataset.action = "run";
+        return;
+    }
+
+    setupActionBtn.textContent = state.setupComplete
+        ? "Apply & Re-run Setup"
+        : "Download & Install";
+    setupActionBtn.dataset.action = "run";
+}
+
+function onSetupAction() {
+    switch (setupActionBtn.dataset.action) {
+        case "close":
+            closeSetup();
+            return;
+        case "quit":
+            quitApp();
+            return;
+        default:
+            runSetup();
+    }
+}
+
+async function quitApp() {
+    setupActionBtn.disabled = true;
+    setupProgressText.textContent = "Quitting...";
+    try {
+        await fetch("/api/quit", { method: "POST" });
+    } catch {
+        // Server closed the connection — that's the expected outcome.
+    }
+    // The browser tab is left with a dead backend; close it if the
+    // window was opened programmatically, otherwise show a hint.
+    window.close();
+    setupProgressText.textContent = "LocalLens has stopped. You can close this tab and relaunch the app.";
 }
 
 async function runSetup() {
@@ -124,8 +230,7 @@ async function runSetup() {
         return;
     }
 
-    setupDownloadBtn.disabled = true;
-    setupCloseBtn.disabled = true;
+    setupActionBtn.disabled = true;
     setupProgress.classList.remove("hidden");
     setupProgressText.textContent = "Starting download...";
 
@@ -133,7 +238,7 @@ async function runSetup() {
         const res = await fetch("/api/setup/run", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ basePath }),
+            body: JSON.stringify({ basePath, processor: setupProcessor.value }),
         });
 
         const reader = res.body.getReader();
@@ -156,11 +261,15 @@ async function runSetup() {
                 } catch {}
             }
         }
+
+        // Re-pull status so the saved-values snapshot reflects what was
+        // just persisted; the button flips back to "Close" automatically.
+        await checkSetupStatus();
     } catch {
         setupProgressText.textContent = "Setup failed. Check your connection and try again.";
     } finally {
-        setupDownloadBtn.disabled = false;
-        setupCloseBtn.disabled = false;
+        setupActionBtn.disabled = false;
+        updateSetupActionButton();
     }
 }
 
@@ -173,6 +282,18 @@ function handleSetupEvent(event) {
     };
 
     const label = labels[event.step] || event.step;
+
+    // The server emits this when the requested processor differs from the
+    // one already loaded in the running process. New libs + config are
+    // persisted, but the swap only takes effect after a relaunch.
+    if (event.step === "restart_required") {
+        setupProgressText.textContent = event.status;
+        state.setupComplete = true;
+        state.restartPending = true;
+        updateSetupBadge();
+        updateSetupActionButton();
+        return;
+    }
 
     if (event.status === "complete" && event.step === "done") {
         setupProgressText.textContent = "Setup complete. You can close this panel.";

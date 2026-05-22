@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -21,26 +22,37 @@ import (
 
 // SetupStatusInfo holds the current setup state returned to the UI.
 type SetupStatusInfo struct {
-	BasePath    string `json:"basePath"`
-	DefaultPath string `json:"defaultPath"`
+	BasePath          string `json:"basePath"`
+	DefaultPath       string `json:"defaultPath"`
+	Processor         string `json:"processor"`
+	DetectedProcessor string `json:"detectedProcessor"`
+	// ActiveProcessor is the backend currently loaded into this process.
+	// It can only change by restarting the application.
+	ActiveProcessor string `json:"activeProcessor"`
 }
 
 // SetupProgress reports a setup step to the caller.
 type SetupProgress func(step, status string)
+
+// SetupRequest holds parameters supplied by the UI when starting setup.
+type SetupRequest struct {
+	BasePath  string
+	Processor string
+}
 
 // Config holds dependencies for creating Handlers.
 type Config struct {
 	Log         logger.Logger
 	Service     *service.Service // nil if setup not yet complete.
 	SetupStatus func() SetupStatusInfo
-	SetupRunner func(ctx context.Context, log logger.Logger, basePath string, progress SetupProgress) (*service.Service, error)
+	SetupRunner func(ctx context.Context, log logger.Logger, req SetupRequest, progress SetupProgress) (*service.Service, error)
 }
 
 // Handlers holds dependencies for all HTTP handlers.
 type Handlers struct {
 	log         logger.Logger
 	setupStatus func() SetupStatusInfo
-	setupRunner func(ctx context.Context, log logger.Logger, basePath string, progress SetupProgress) (*service.Service, error)
+	setupRunner func(ctx context.Context, log logger.Logger, req SetupRequest, progress SetupProgress) (*service.Service, error)
 
 	mu  sync.RWMutex
 	svc *service.Service
@@ -66,6 +78,7 @@ func (h *Handlers) Register(mux *http.ServeMux, staticFS fs.FS) {
 	mux.HandleFunc("POST /api/open", h.handleOpen)
 	mux.HandleFunc("GET /api/setup/status", h.handleSetupStatus)
 	mux.HandleFunc("POST /api/setup/run", h.handleSetupRun)
+	mux.HandleFunc("POST /api/quit", h.handleQuit)
 
 	mux.Handle("GET /", http.FileServerFS(staticFS))
 }
@@ -306,7 +319,8 @@ func (h *Handlers) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) handleSetupRun(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		BasePath string `json:"basePath"`
+		BasePath  string `json:"basePath"`
+		Processor string `json:"processor"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -332,16 +346,46 @@ func (h *Handlers) handleSetupRun(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 	}
 
-	svc, err := h.setupRunner(r.Context(), h.log, req.BasePath, send)
+	svc, err := h.setupRunner(r.Context(), h.log, SetupRequest{
+		BasePath:  req.BasePath,
+		Processor: req.Processor,
+	}, send)
 	if err != nil {
 		return
 	}
 
+	// A nil svc means setupRunner handled its own terminal messaging
+	// (e.g. the processor change requires a restart and no new Service
+	// could be built in this process). Keep the current h.svc as-is.
+	if svc == nil {
+		return
+	}
+
 	h.mu.Lock()
+	old := h.svc
 	h.svc = svc
 	h.mu.Unlock()
 
+	// Release the embedder/describer from the previous Service so the new
+	// one isn't shadowed by leaked model handles.
+	if old != nil {
+		old.Close(r.Context())
+	}
+
 	send("done", "complete")
+}
+
+// handleQuit terminates the LocalLens process. Used by the setup panel
+// after a processor change so the user can relaunch and pick up the new
+// runtime backend on the next start.
+func (h *Handlers) handleQuit(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNoContent)
+
+	// Give the response a beat to flush before tearing the process down.
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		os.Exit(0)
+	}()
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
