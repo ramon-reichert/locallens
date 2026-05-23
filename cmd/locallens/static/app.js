@@ -393,7 +393,20 @@ async function togglePickerExpand(path, wrapper, depth) {
         const arrow = wrapper.querySelector(".tree-arrow");
         if (arrow) arrow.classList.add("expanded");
         await renderPickerChildNodes(wrapper, path, depth);
+        scrollExpandedIntoView(wrapper);
     }
+}
+
+// scrollExpandedIntoView scrolls the enclosing scrollable container so the
+// last child of a freshly-expanded node becomes visible. Uses block:nearest
+// so already-visible content stays put and only off-screen children cause
+// the panel to scroll down.
+function scrollExpandedIntoView(wrapper) {
+    const children = wrapper.querySelector(".tree-children");
+    if (!children) return;
+    const last = children.lastElementChild;
+    if (!last) return;
+    last.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
 
 async function renderPickerChildNodes(wrapper, path, depth) {
@@ -512,6 +525,7 @@ async function toggleExpand(path, wrapper, depth) {
         const arrow = wrapper.querySelector(".tree-arrow");
         if (arrow) arrow.classList.add("expanded");
         await renderChildNodes(wrapper, path, depth);
+        scrollExpandedIntoView(wrapper);
     }
 }
 
