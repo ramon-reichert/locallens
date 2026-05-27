@@ -16,10 +16,7 @@
 
 # To-do:
 
-- Add some config values to the setup panel and make them configurable through the app;
-  - Does make sense to "embeed" the models within the release, excluding the downloading models flow? The llama libs would still have to be downloaded.
-- Think of make LocalLens service logic private and make the part related to Kronk public;
-- Check if the error with vulkan continues -> T-019dfff7-3572-72cc-bede-689295bad366
+- Check if the error with vulkan continues -> T-019dfff7-3572-72cc-bede-689295bad366 -> pinned to kronk v1.24.8, last before the bug. Fix commited in kronk local branch "vulkan_bug"
 - Release an MVP -> GoReleaser
 
 - Test performance with cpu vs vulkan
