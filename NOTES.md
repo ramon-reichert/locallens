@@ -1,42 +1,36 @@
+# To-do:
+
+- Check "per-request allocation" error with vulkan (and maybe other processors) -> T-019dfff7-3572-72cc-bede-689295bad366 -> pinned to kronk v1.24.8, last version before the bug. Possible fix committed in local branch "vulkan_bug" in both kronk AND locallens repos. Llama.cpp pinned to version b9247 for compatibility.
+- Adjust embedding flow to be more accurate. Maybe using grammar (Kronk);
+- Make performance tests for the embedding too;
+- Look for suggested model config values at the model provider sites, or test other models > https://chatgpt.com/c/6a04c226-7d9c-83e9-86ae-7f8743cea1ec ;
+- See if the LocalLens can get any benefit from FlashAttention;
+
+- Search for "TODO" along the codebase;
+- Vendor when reach stable version?;
+
+- Review and correct indexing/searching recursiveness code; Add recursiveness test too;
+
+
 # Future features
 
-- Option to the user describe a common context of a set o images before the description -not the search- to ask the vision model to use more contextualized vocabulary and to pay more attention in what makes that image unique among the others in the same context. e.g.: search for a specific moment of the celebration among many wedding photos;
+- Option to the user describe a common context of a set of images before the description -not the search- to ask the vision model to use more contextualized vocabulary and to pay more attention in what makes that image unique among the others in the same context. e.g.: search for a specific moment of the celebration among many wedding photos;
 - Adapt prompt and search to different idioms;
 - Face recognition;
 - Configurable detail vs speed;
 - Run the tool inside local explorer browsers; As a plugin?
 - Run the tool inside photographers apps (adobe,etc); As a plugin?
-- Run it in mobile;
+- Run it in mobile? -> iPhone Photos;
 - Configuration adaptable to the user hardware constraints;
 - LocalEars to audio files;
 - LocalMovs to video files;
-- Concurrent improvments;
-- Include subfolders in search
-- Add flags and/or description to files metadata and give option to re-describe
-
-# To-do:
-
-- Check if the error with vulkan continues -> T-019dfff7-3572-72cc-bede-689295bad366 -> pinned to kronk v1.24.8, last before the bug. Fix commited in kronk local branch "vulkan_bug"
-- Release an MVP -> GoReleaser
-
-- Test performance with cpu vs vulkan
-- Adjust embedding flow to be more accurate;
-- Make performance tests for the embedding too;
-- Look for suggested model config values at the model provider sites, or test other models > https://chatgpt.com/c/6a04c226-7d9c-83e9-86ae-7f8743cea1ec ;
-- See if the vision model can get benefit from FlashAtention;
-- Use grammar (Kronk)
-- See if model can use same image decoded to subsequent prompts (if we realize that it's need to a better embedding);
-
-- Search for "TODO" along the codebase;
-- Vendor when reach stable version;
-
-- Review and correct indexing/searching recursiveness code; Add recursiveness test too;
+- Concurrent improvements;
 
 
 # Issues
 
 - How to display best scored images? A list, a link, a preview screen?
-- Similar tools[https://www.google.com/search?q=search+my+photos+offline+photographer&sca_esv=6cda7a6ffd36fe53&rlz=1C1CHZN_pt-brBR949BR949&sxsrf=ANbL-n6odB5tPvr0NwCsWpLzPjT9f_4tAg%3A1769308487234&ei=R4F1afmGDoXc5OUP9p3W-AY&oq=search+my+photos+offline+photograper&gs_lp=Egxnd3Mtd2l6LXNlcnAiJHNlYXJjaCBteSBwaG90b3Mgb2ZmbGluZSBwaG90b2dyYXBlcioCCAAyBxAhGKABGAoyBxAhGKABGApIpJcBUMgLWLyEAXAGeACQAQCYAeABoAHxGKoBBjAuMTcuMrgBA8gBAPgBAZgCGaAC-xnCAggQABiwAxjvBcICBRAAGO8FwgIFECEYoAHCAgUQIRifBZgDAIgGAZAGBJIHBjYuMTcuMqAH6FeyBwYwLjE3LjK4B-EZwgcHMC4xMC4xNcgHToAIAA&sclient=gws-wiz-serp]
+- Similar tools[https://www.google.com/search?q=search+my+photos+offline+photographer&sca_esv=6cda7a6ffd36fe53&rlz=1C1CHZN_pt-brBR949BR949&sxsrf=ANbL-n6odB5tPvr0NwCsWpLzPjT9f_4tAg%3A1769308487234&ei=R4F1afmGDoXc5OUP9p3W-AY&oq=search+my+photos+offline+photographer&gs_lp=Egxnd3Mtd2l6LXNlcnAiJHNlYXJjaCBteSBwaG90b3Mgb2ZmbGluZSBwaG90b2dyYXBlcioCCAAyBxAhGKABGAoyBxAhGKABGApIpJcBUMgLWLyEAXAGeACQAQCYAeABoAHxGKoBBjAuMTcuMrgBA8gBAPgBAZgCGaAC-xnCAggQABiwAxjvBcICBRAAGO8FwgIFECEYoAHCAgUQIRifBZgDAIgGAZAGBJIHBjYuMTcuMqAH6FeyBwYwLjE3LjK4B-EZwgcHMC4xMC4xNcgHToAIAA&sclient=gws-wiz-serp]
 
 # Performance and configs
 
@@ -47,8 +41,8 @@
 
 ### Considerations:
 
-- Many outToks(≈250) are needed to get good descriptions(IT IS A MUST), but there is no need for more thah maxTok=300;
-- But actually verbose descriptions alone cannot garantee good vectors. Need to explore more what kind of descriptions can generate good vectors, and than try to enforce them through prompt or using grammar. 
+- Many outToks(≈250) are needed to get good descriptions(IT IS A MUST), but there is no need for more than maxTok=300;
+- But actually verbose descriptions alone cannot guarantee good vectors. Need to explore more what kind of descriptions can generate good vectors, and then try to enforce them through prompt or using grammar. 
 - I found before that format restrictive prompts were preventing the model to "talk", but I need to ensure that the cause was not bad configuration.
 
 - Temperature is set to 0.1 because we want: "same description to same image" every time;
@@ -57,28 +51,28 @@
 
 - Image maxSize directly impacts inference time. 128px - 17s | 256px - 23s | 384px - 31s
 - 384px provide more precise descriptions (text, context, small details). Can be re-evaluated after search tests.
-- A test with this prompt - "Did you loaded an image? Just say yes or no." - show the time to "load" the image: 62px - 2,2s | 384px - 11,3s - Maybe there is a metric for that.
-- Now that is a metric: ttft - time to first token - but now that is not the bottleneck of inference time anymore. The description apropriate to a good embedding will be the most important thing.
+- A test with this prompt - "Did you load an image? Just say yes or no." - shows the time to "load" the image: 62px - 2,2s | 384px - 11,3s - Maybe there is a metric for that.
+- Now that is a metric: ttft - time to first token - but now that is not the bottleneck of inference time anymore. The description appropriate for a good embedding will be the most important thing.
 
 - Big image maxSize(>384px) and restrictive/demanding prompts can cause model to fail responses when running with limited hardware, as mine. These two factors showed up to play a higher role in performance than model configs(considering viable values, at least) as cxtWindow, Nbatch and NUbatch.
 - Thanks to changes made to allow track yzma mtmd.HelperEvalChunks return codes, it is possible to see that big image maxSize(768, sometimes even 512) can cause a prefill error, KV_cache_full, totally corrupting the response;
-- The restrictive/demanding prompts don't cause KV_cache_full error, but increase a lot the time/tokes and cause truncated(few tokens) response.
-- The hallucinated responses (randomly repetead words forever) could not be precisely associated with some test case yet. More often when KVcache Q4_0 than Q8_0;
-- The model size itself and its quantization value, as the projection file attached, impacts the hardware demand. Current using small ones, with good behavior of descriptions achieved. Can try even smaller configs later.
+- The restrictive/demanding prompts don't cause KV_cache_full error, but increase a lot the time/tokens and cause truncated(few tokens) response.
+- The hallucinated responses (randomly repeated words forever) could not be precisely associated with some test case yet. More often when KVcache Q4_0 than Q8_0;
+- The model size itself and its quantization value, as the projection file attached, impacts the hardware demand. Currently using small ones, with good behavior of descriptions achieved. Can try even smaller configs later.
 - I assumed KV cache precision should track model weight precision — it doesn't. They're independent. The K cache holds attention keys that get multiplied against every query head in the group; with Qwen2-VL's 7:1 GQA ratio, Q4_0 quantization noise in the K cache gets amplified across all 7 sharing heads, destroying attention patterns. Q8_0 is the minimum safe level for K cache, especially on small Qwen models. V cache is more tolerant (could even go Q4_0), but Q8_0/Q8_0 is the pragmatic safe default.
 
-- Kronk now has auto-detect GPU. If the machine has a GPU, kronk will use it automatically. BUT, if a machine has only an older iGPU and low memory (< 16GB), to use the auto-selected Vulkan backend is worse than use CPU-only as processor. So in this case is better set the env KRONK_PROCESSOR=cpu; Maybe we can set some threshold values to choose Vulkan rather than CPU.
+- Kronk now has auto-detect GPU. If the machine has a GPU, kronk will use it automatically. BUT, if a machine has only an older iGPU and low memory (< 16GB), to use the auto-selected Vulkan backend is worse than use CPU-only as processor. So in this case is better set the env KRONK_PROCESSOR=cpu; Maybe we can set some threshold values to choose Vulkan instead of CPU.
 
-- Tokens/sec seems not to be related with config or image size. It remains aprox. 14-15 tok/s. Maybe it is related just with hardware? No, it varies across same hardware runs, maybe related with memory demand on the hardware at inference time.
+- Tokens/sec seems not to be related with config or image size. It remains approx. 14-15 tok/s. Maybe it is related just with hardware? No, it varies across same hardware runs, maybe related with memory demand on the hardware at inference time.
 
-- inToks is always the same, despite model config and image maxSize. Maybe it is related with the prompt? YES, with the prompt AND image size.
+- inToks is always the same, despite model config and image maxSize? Maybe it is related with the prompt? YES, with the prompt AND image size.
 
-- Until now, we reach avg description times of 24sec/img(just CPU, 8GB RAM) and 7sec/img(6GB VRAM GPU, 32GB RAM) with good descriptions, but bad search similarity;
+- Until now, we reached avg description times of 24sec/img(CPU only, 8GB RAM) and 7sec/img(6GB VRAM GPU, 32GB RAM) with good descriptions, but bad search similarity;
 
 
 
 ### Some performance test outputs:
-more recents at top
+more recent at top
 
 
 

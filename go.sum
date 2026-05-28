@@ -30,6 +30,8 @@ github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapp
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.56.0/go.mod h1:6ZZMQhZKDvUvkJw2rc+oDP90tMMzuU/J+5HG1ZmPOmE=
 github.com/ardanlabs/jinja v1.4.0 h1:9iE0/wF4zhcws1CYZCWqJTQP8YuhC4FjycBGzCTuOFw=
 github.com/ardanlabs/jinja v1.4.0/go.mod h1:aXXzlJfjA+T3XNKA/YT5ZtDq2VJxt5a5siZ8cl9B35Q=
+github.com/ardanlabs/kronk v1.24.8 h1:tay1WjgfeoOaPSpVfKxXKEhDt+AYEgzfIP71tzHoEpo=
+github.com/ardanlabs/kronk v1.24.8/go.mod h1:dtr7qV5m9czh3MoJ8H0x0xwI6yY4hY2iZaz2MnV1X3k=
 github.com/aws/aws-sdk-go-v2 v1.41.7 h1:DWpAJt66FmnnaRIOT/8ASTucrvuDPZASqhhLey6tLY8=
 github.com/aws/aws-sdk-go-v2 v1.41.7/go.mod h1:4LAfZOPHNVNQEckOACQx60Y8pSRjIkNZQz1w92xpMJc=
 github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.10 h1:gx1AwW1Iyk9Z9dD9F4akX5gnN3QZwUB20GGKH/I+Rho=

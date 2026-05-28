@@ -82,7 +82,6 @@ func (d *Describer) Load(ctx context.Context) error {
 		model.WithCacheTypeK(model.GGMLType(config.ParseGGMLType(v.CacheTypeK))),
 		model.WithCacheTypeV(model.GGMLType(config.ParseGGMLType(v.CacheTypeV))),
 		model.WithIncrementalCache(false),
-		model.WithReuseMTMDContext(true),
 	)
 	if err != nil {
 		return fmt.Errorf("load vision model: %w", err)

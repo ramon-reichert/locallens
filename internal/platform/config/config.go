@@ -113,7 +113,8 @@ func DefaultBasePath() string {
 // Defaults returns the default configuration with sensible values.
 func Defaults() Config {
 	return Config{
-		BasePath: DefaultBasePath(),
+		BasePath:        DefaultBasePath(),
+		LlamaCppVersion: "b9247",
 		ModelsURLs: Models{
 			VisionModelURL: "https://huggingface.co/ggml-org/Qwen2-VL-2B-Instruct-GGUF/resolve/main/Qwen2-VL-2B-Instruct-Q4_K_M.gguf",
 			VisionProjURL:  "https://huggingface.co/ggml-org/Qwen2-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen2-VL-2B-Instruct-Q8_0.gguf",

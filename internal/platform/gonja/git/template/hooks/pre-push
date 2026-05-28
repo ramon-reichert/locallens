@@ -1,3 +1,0 @@
-set -e
-
-. $(git rev-parse --show-toplevel)/git/hooks/pre-push

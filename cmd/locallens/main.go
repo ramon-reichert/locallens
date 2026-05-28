@@ -112,14 +112,19 @@ func setupRunner(ctx context.Context, log logger.Logger, req app.SetupRequest, p
 	cfg.Processor = req.Processor
 
 	// Any processor change in the saved config requires a restart, because
-	// the Kronk SDK can't swap llama.cpp libraries mid-process. We don't
-	// compare against the active runtime here because a user who already
-	// changed processor in a prior session (without restarting) would
-	// otherwise see an inconsistent UI.
-	processorSwitch := req.Processor != "" && req.Processor != savedProcessor
+	// the Kronk SDK can't swap llama.cpp libraries mid-process. We compare
+	// against the saved config (not the active runtime) so a user who
+	// already changed processor in a prior session without restarting
+	// still sees consistent UI. On a true first install there is no
+	// resident Kronk runtime yet, so no restart is needed — we let the
+	// Service initialize in-process below.
+	processorSwitch := kronk.ActiveProcessor() != "" &&
+		req.Processor != "" &&
+		req.Processor != savedProcessor
 
 	progress("libs", "downloading")
 	if err := kronk.InstallDependencies(ctx, log, cfg); err != nil {
+		log(ctx, "setup: install dependencies failed", "error", err)
 		progress("libs", "error: "+err.Error())
 		return nil, err
 	}
@@ -127,10 +132,12 @@ func setupRunner(ctx context.Context, log logger.Logger, req app.SetupRequest, p
 
 	progress("models", "downloading")
 	if err := kronk.Init(cfg); err != nil {
+		log(ctx, "setup: kronk init failed", "error", err)
 		progress("models", "error: "+err.Error())
 		return nil, err
 	}
 	if _, err := kronk.DownloadModels(ctx, log, cfg); err != nil {
+		log(ctx, "setup: download models failed", "error", err)
 		progress("models", "error: "+err.Error())
 		return nil, err
 	}
@@ -138,9 +145,11 @@ func setupRunner(ctx context.Context, log logger.Logger, req app.SetupRequest, p
 
 	if processorSwitch {
 		if err := config.Save(cfg); err != nil {
+			log(ctx, "setup: save config failed", "error", err)
 			progress("save", "error: "+err.Error())
 			return nil, err
 		}
+		log(ctx, "processor changed", "config saved")
 		progress("restart_required", "Restart LocalLens to apply the processor change.")
 		return nil, nil
 	}
@@ -148,11 +157,16 @@ func setupRunner(ctx context.Context, log logger.Logger, req app.SetupRequest, p
 	progress("service", "initializing")
 	svc, err := initService(ctx, log, cfg)
 	if err != nil {
+		log(ctx, "setup: service init failed", "error", err)
 		progress("service", "error: "+err.Error())
 		return nil, err
 	}
 
-	config.Save(cfg)
+	if err := config.Save(cfg); err != nil {
+		log(ctx, "setup: save config failed", "error", err)
+	}
+
+	log(ctx, "setup finished", "config saved")
 
 	return svc, nil
 }
