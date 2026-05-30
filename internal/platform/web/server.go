@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/ramon-reichert/locallens/internal/platform/logger"
@@ -50,15 +51,22 @@ func New(cfg Config) *Server {
 // received (SIGINT or SIGTERM). It then gracefully shuts down the server.
 func (s *Server) ListenAndServe() error {
 	shutdown := make(chan os.Signal, 1)
-	signal.Notify(shutdown, os.Interrupt)
+	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
 
+	listener, err := net.Listen("tcp", s.http.Addr)
+	if err != nil {
+		return fmt.Errorf("listen: %w", err)
+	}
+
+	s.http.Addr = listener.Addr().String()
 	serverErrors := make(chan error, 1)
 
 	go func() {
 		s.log(context.Background(), "server started", "addr", s.http.Addr)
-		serverErrors <- s.http.ListenAndServe()
+		serverErrors <- s.http.Serve(listener)
 	}()
 
+	waitForServer(s.http.Addr)
 	openBrowser("http://" + s.http.Addr)
 
 	select {
@@ -87,6 +95,20 @@ func (s *Server) Addr() string {
 	return s.http.Addr
 }
 
+func waitForServer(addr string) {
+	deadline := time.Now().Add(5 * time.Second)
+
+	for time.Now().Before(deadline) {
+		conn, err := net.DialTimeout("tcp", addr, 200*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			return
+		}
+
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
 func openBrowser(url string) {
 	var cmd *exec.Cmd
 
@@ -99,5 +121,7 @@ func openBrowser(url string) {
 		cmd = exec.Command("xdg-open", url)
 	}
 
-	cmd.Start()
+	if err := cmd.Start(); err != nil {
+		fmt.Fprintln(os.Stderr, "open browser:", err)
+	}
 }

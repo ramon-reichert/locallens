@@ -71,8 +71,8 @@ func run() error {
 	server := web.New(web.Config{
 		Log:  log,
 		Mux:  mux,
-		Host: "localhost",
-		Port: "8080",
+		Host: "127.0.0.1",
+		Port: "0",
 	})
 
 	return server.ListenAndServe()
