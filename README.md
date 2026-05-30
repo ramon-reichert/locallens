@@ -29,7 +29,7 @@ With these pieces, LocalLens can index a folder of images, describe each image l
     - which `processor` will run inference
     - The processor is auto-detected based on your hardware, but you can switch to `cpu` if you experience issues, or choose another compatible processor if you have multiple GPUs available. These settings can be changed later, but restarting the application is required.
 
-![setup_panel](assets\setup_panel-0.jpeg)
+![setup_panel](https://github.com/ramon-reichert/locallens/blob/e5a84456d2209fbd89411aed09c54fd13ffe89dd/assets/setup_panel-0.jpeg)
 
 4) Navigate to the folder containing the images you want to include in your catalog and click the `Index` button.
     - Wait for indexing to complete. Processing time varies significantly depending on your hardware.
@@ -39,11 +39,11 @@ With these pieces, LocalLens can index a folder of images, describe each image l
     - The indexing flow is crash-resilient. If something goes wrong during indexing, previously processed images remain safely stored in the index.
     - You can index as many folders as you want, although each folder currently acts as an independent catalog. Recursive indexing is not implemented yet, but it is on the roadmap.
 
-![indexing_folder](assets\indexing_folder.gif)
+![indexing_folder](https://github.com/ramon-reichert/locallens/blob/e5a84456d2209fbd89411aed09c54fd13ffe89dd/assets/indexing_folder.gif)
 
 5) Once indexing is complete, use the `Search` field to query your images using natural language. LocalLens quickly returns the most semantically related matches.
 
-![searching_images](assets\search_images.gif)
+![searching_images](https://github.com/ramon-reichert/locallens/blob/e5a84456d2209fbd89411aed09c54fd13ffe89dd/assets/search_images.gif)
 
 ### Developers
 
