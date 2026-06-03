@@ -153,6 +153,8 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (DescribeRes
 
 	start := time.Now()
 
+	d.log(ctx, "CALLING KRONK CHAT") // TODO: Remove debug code
+
 	resp, err := krn.Chat(ctx, data)
 	if err != nil {
 		return DescribeResult{}, fmt.Errorf("chat: %w", err)

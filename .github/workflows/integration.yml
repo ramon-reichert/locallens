@@ -49,7 +49,6 @@ jobs:
 
   windows:
     name: Windows
-    needs: linux
     runs-on: windows-latest
 
     steps:
@@ -88,7 +87,6 @@ jobs:
 
   macos:
     name: macOS
-    needs: windows
     runs-on: macos-latest
 
     steps:

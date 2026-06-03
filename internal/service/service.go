@@ -127,7 +127,7 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string, progress I
 		return 0, fmt.Errorf("load describer: %w", err)
 	}
 	defer func() {
-		s.log(ctx, "CALLING UNLOAD")
+		s.log(ctx, "CALLING UNLOAD") // TODO: Remove debug code
 		if err := s.describer.Unload(ctx); err != nil {
 			s.log(ctx, "unload describer error", "error", err)
 		}
@@ -163,6 +163,8 @@ func (s *Service) indexFolder(ctx context.Context, folderPath string, tracker *i
 	if err != nil {
 		return 0, fmt.Errorf("load index %q: %w", folderPath, err)
 	}
+
+	s.log(ctx, "INDEX LOADED") // TODO: Remove debug code
 
 	// Per-image describe → embed → add → save. Saving after each image makes
 	// progress durable: a crash after image N leaves images 1..N persisted,
