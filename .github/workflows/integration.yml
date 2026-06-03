@@ -1,0 +1,42 @@
+name: Integration
+
+on:
+  workflow_dispatch:
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Restore Kronk cache
+        id: cache-kronk
+        uses: actions/cache/restore@v5
+        with:
+          path: ~/.kronk
+          key: ubuntu-kronk-v1
+
+      - name: Setup LocalLens dependencies
+        if: steps.cache-kronk.outputs.cache-hit != 'true'
+        env:
+          CGO_ENABLED: 0
+        run: go run ./cmd/setup/
+
+      - name: Save Kronk cache
+        if: steps.cache-kronk.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ~/.kronk
+          key: ubuntu-kronk-v1
+
+      - name: Run service tests
+        env:
+          CGO_ENABLED: 0
+        run: go test -timeout 30m -v -count=1 ./internal/service/tests
