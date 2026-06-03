@@ -5,6 +5,8 @@ Built on top of the [Kronk SDK](https://github.com/ardanlabs/kronk), LocalLens i
 LocalLens specifically focuses on using the smallest models possible while still delivering practical results, demonstrating how Kronk can power useful AI applications not only for developers with high-end setups, but also for everyday users on ordinary consumer hardware.
 
 
+If you liked it, please consider giving this project a star on GitHub! Thank you!
+
 ## Kronk SDK usage
 
 LocalLens uses Kronk for three main capabilities:
@@ -48,3 +50,4 @@ With these pieces, LocalLens can index a folder of images, describe each image l
 ### Developers
 
 Clone the repository and use the Makefile targets to run, build, and test the project.
+

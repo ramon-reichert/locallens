@@ -127,6 +127,7 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string, progress I
 		return 0, fmt.Errorf("load describer: %w", err)
 	}
 	defer func() {
+		s.log(ctx, "CALLING UNLOAD")
 		if err := s.describer.Unload(ctx); err != nil {
 			s.log(ctx, "unload describer error", "error", err)
 		}
