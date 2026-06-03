@@ -8,17 +8,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  integration:
-    name: ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
 
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-          - macos-latest
+  linux:
+    name: Linux
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -33,9 +26,8 @@ jobs:
         id: cache-kronk
         uses: actions/cache/restore@v5
         with:
-          path: |
-            ~/.kronk
-          key: ${{ runner.os }}-kronk-v1
+          path: ~/.kronk
+          key: Linux-kronk-v1
 
       - name: Setup LocalLens dependencies
         if: steps.cache-kronk.outputs.cache-hit != 'true'
@@ -47,9 +39,86 @@ jobs:
         if: steps.cache-kronk.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
         with:
-          path: |
-            ~/.kronk
-          key: ${{ runner.os }}-kronk-v1
+          path: ~/.kronk
+          key: Linux-kronk-v1
+
+      - name: Run service tests
+        env:
+          CGO_ENABLED: 0
+        run: go test -timeout 30m -v -count=1 ./internal/service/tests
+
+  windows:
+    name: Windows
+    needs: linux
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Restore Kronk cache
+        id: cache-kronk
+        uses: actions/cache/restore@v5
+        with:
+          path: ~/.kronk
+          key: Windows-kronk-v1
+
+      - name: Setup LocalLens dependencies
+        if: steps.cache-kronk.outputs.cache-hit != 'true'
+        env:
+          CGO_ENABLED: 0
+        run: go run ./cmd/setup/
+
+      - name: Save Kronk cache
+        if: steps.cache-kronk.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ~/.kronk
+          key: Windows-kronk-v1
+
+      - name: Run service tests
+        env:
+          CGO_ENABLED: 0
+        run: go test -timeout 30m -v -count=1 ./internal/service/tests
+
+  macos:
+    name: macOS
+    needs: windows
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Restore Kronk cache
+        id: cache-kronk
+        uses: actions/cache/restore@v5
+        with:
+          path: ~/.kronk
+          key: macOS-kronk-v1
+
+      - name: Setup LocalLens dependencies
+        if: steps.cache-kronk.outputs.cache-hit != 'true'
+        env:
+          CGO_ENABLED: 0
+        run: go run ./cmd/setup/
+
+      - name: Save Kronk cache
+        if: steps.cache-kronk.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ~/.kronk
+          key: macOS-kronk-v1
 
       - name: Run service tests
         env:
