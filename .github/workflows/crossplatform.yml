@@ -1,0 +1,43 @@
+name: Cross Platform
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        run: |
+          CGO_ENABLED=0 go build ./cmd/locallens
+
+      - name: Verify Windows release build
+        if: runner.os == 'Windows'
+        run: |
+          CGO_ENABLED=0 go build -ldflags "-H windowsgui" -o locallens.exe ./cmd/locallens
+
+      - name: Run unit tests
+        run: |
+          make test-unit
