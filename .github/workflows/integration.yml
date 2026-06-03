@@ -1,18 +1,24 @@
 name: Integration
 
+on:
+  workflow_dispatch:
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
-
 jobs:
   integration:
-    runs-on: ubuntu-latest
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
 
     steps:
       - name: Checkout
@@ -27,8 +33,9 @@ jobs:
         id: cache-kronk
         uses: actions/cache/restore@v5
         with:
-          path: ~/.kronk
-          key: ubuntu-kronk-v1
+          path: |
+            ~/.kronk
+          key: ${{ runner.os }}-kronk-v1
 
       - name: Setup LocalLens dependencies
         if: steps.cache-kronk.outputs.cache-hit != 'true'
@@ -40,8 +47,9 @@ jobs:
         if: steps.cache-kronk.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
         with:
-          path: ~/.kronk
-          key: ubuntu-kronk-v1
+          path: |
+            ~/.kronk
+          key: ${{ runner.os }}-kronk-v1
 
       - name: Run service tests
         env:

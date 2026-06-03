@@ -1,4 +1,4 @@
-name: Cross Platform
+name: Cross Build
 
 on:
   push:
@@ -6,6 +6,10 @@ on:
       - main
   pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
@@ -33,14 +37,14 @@ jobs:
         env:
           CGO_ENABLED: 0
         run: go build ./cmd/locallens
-     
+
       - name: Verify Windows release build
         if: runner.os == 'Windows'
         env:
-         CGO_ENABLED: 0
+          CGO_ENABLED: 0
         run: go build -ldflags "-H windowsgui" -o locallens.exe ./cmd/locallens
 
       - name: Run unit tests
         env:
-         CGO_ENABLED: 0
+          CGO_ENABLED: 0
         run: go test -timeout 15s -v -count=1 ./internal/service/tests/unittests/...
