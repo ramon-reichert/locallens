@@ -30,14 +30,17 @@ jobs:
           go-version-file: go.mod
 
       - name: Build
-        run: |
-          CGO_ENABLED=0 go build ./cmd/locallens
-
+        env:
+          CGO_ENABLED: 0
+        run: go build ./cmd/locallens
+     
       - name: Verify Windows release build
         if: runner.os == 'Windows'
-        run: |
-          CGO_ENABLED=0 go build -ldflags "-H windowsgui" -o locallens.exe ./cmd/locallens
+        env:
+         CGO_ENABLED: 0
+        run: go build -ldflags "-H windowsgui" -o locallens.exe ./cmd/locallens
 
       - name: Run unit tests
-        run: |
-          make test-unit
+        env:
+         CGO_ENABLED: 0
+        run: go test -timeout 15s -v -count=1 ./internal/service/tests/unittests/...
