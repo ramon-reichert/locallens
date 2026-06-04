@@ -166,10 +166,22 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (DescribeRes
 
 	d.log(ctx, "CALLING KRONK CHAT", "temperature", p.Temperature, "max_tokens", p.MaxTokens, "system prompt", p.SystemPrompt, "user prompt", p.UserPrompt, "imageData", len(imageData)) // TODO: Remove debug code
 
-	resp, err := krn.Chat(ctx, data)
-	if err != nil {
-		return DescribeResult{}, fmt.Errorf("chat: %w", err)
-	}
+	resp := model.ChatResponse{}
+
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				d.log(ctx, "PANIC INSIDE CHAT: %#v\n", r)
+				panic(r)
+			}
+		}()
+
+		resp, _ = krn.Chat(ctx, data)
+		//	if err != nil {
+		//		return DescribeResult{}, fmt.Errorf("chat: %w", err)
+		//	}
+
+	}()
 
 	d.log(ctx, "RETURNED FROM KRONK CHAT", "message content", resp.Choices[0].Message.Content, "finish reason", resp.Choices[0].FinishReason()) // TODO: Remove debug code
 
