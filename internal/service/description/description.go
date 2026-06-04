@@ -171,6 +171,8 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (DescribeRes
 		return DescribeResult{}, fmt.Errorf("chat: %w", err)
 	}
 
+	d.log(ctx, "RETURNED FROM KRONK CHAT", "message content", resp.Choices[0].Message.Content, "finish reason", resp.Choices[0].FinishReason()) // TODO: Remove debug code
+
 	if len(resp.Choices) > 0 && resp.Choices[0].FinishReason() == model.FinishReasonError {
 		errMsg := ""
 		if resp.Choices[0].Delta != nil {
