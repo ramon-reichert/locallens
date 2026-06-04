@@ -129,6 +129,12 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (DescribeRes
 		return DescribeResult{}, ErrModelNotLoaded
 	}
 
+	d.log(ctx, ". . . . . . .")
+	d.log(ctx, ". . . . . . .")
+	d.log(ctx, "KRONK MODEL CONFIG", "config", krn.ModelConfig()) // TODO: Remove debug code
+	d.log(ctx, ". . . . . . .")
+	d.log(ctx, ". . . . . . .")
+
 	p := d.prompt
 	maxSide := d.maxSide
 
@@ -153,7 +159,7 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (DescribeRes
 
 	start := time.Now()
 
-	d.log(ctx, "CALLING KRONK CHAT") // TODO: Remove debug code
+	d.log(ctx, "CALLING KRONK CHAT", "temperature", p.Temperature, "max_tokens", p.MaxTokens, "system prompt", p.SystemPrompt, "user prompt", p.UserPrompt, "imageData", imageData) // TODO: Remove debug code
 
 	resp, err := krn.Chat(ctx, data)
 	if err != nil {
