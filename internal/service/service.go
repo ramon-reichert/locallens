@@ -20,7 +20,7 @@ import (
 
 const (
 	indexFileName        = ".locallens.index"
-	describeImageTimeout = 2 * time.Minute
+	describeImageTimeout = 10 * time.Minute
 	embedTimeout         = 1 * time.Minute
 )
 
