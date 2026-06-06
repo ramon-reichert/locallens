@@ -5,12 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 
 	"github.com/ardanlabs/kronk/sdk/kronk"
 	"github.com/ardanlabs/kronk/sdk/kronk/model"
-	"github.com/ardanlabs/kronk/sdk/tools/libs"
 
 	"github.com/ramon-reichert/locallens/internal/platform/config"
 	"github.com/ramon-reichert/locallens/internal/platform/logger"
@@ -130,10 +130,6 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (DescribeRes
 		return DescribeResult{}, ErrModelNotLoaded
 	}
 
-	libsVersion, _ := libs.ReadVersionFile(libs.Path(""))
-	d.log(ctx, ". . . . . . .")
-	d.log(ctx, ". . . . . . .")
-	d.log(ctx, "KRONK LIBS", "version tag", libsVersion) // TODO: Remove debug code
 	d.log(ctx, ". . . . . . .")
 	d.log(ctx, ". . . . . . .")
 	d.log(ctx, "KRONK MODEL CONFIG", "config", krn.ModelConfig()) // TODO: Remove debug code
@@ -166,38 +162,47 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (DescribeRes
 
 	d.log(ctx, "CALLING KRONK CHAT", "temperature", p.Temperature, "max_tokens", p.MaxTokens, "system prompt", p.SystemPrompt, "user prompt", p.UserPrompt, "imageData", len(imageData)) // TODO: Remove debug code
 
-	resp := model.ChatResponse{}
+	var resp model.ChatResponse
+	var chatErr error
 
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				d.log(ctx, "PANIC INSIDE CHAT: %#v\n", r)
+				d.log(ctx, "PANIC INSIDE KRONK CHAT", "panic", r, "stack", string(debug.Stack()))
 				panic(r)
 			}
 		}()
 
-		resp, _ = krn.Chat(ctx, data)
-		// resp, err = krn.Chat(ctx, data)
-		//	if err != nil {
-		//		return DescribeResult{}, fmt.Errorf("chat: %w", err)
-		//	}
-
+		resp, chatErr = krn.Chat(ctx, data)
 	}()
 
-	d.log(ctx, "RETURNED FROM KRONK CHAT", "message content", resp.Choices[0].Message.Content, "finish reason", resp.Choices[0].FinishReason()) // TODO: Remove debug code
+	d.log(ctx, "RETURNED FROM KRONK CHAT", "error", chatErr, "choices", len(resp.Choices)) // TODO: Remove debug code
+	if chatErr != nil {
+		return DescribeResult{}, fmt.Errorf("chat: %w", chatErr)
+	}
+	if len(resp.Choices) == 0 {
+		return DescribeResult{}, fmt.Errorf("chat: empty response")
+	}
 
-	if len(resp.Choices) > 0 && resp.Choices[0].FinishReason() == model.FinishReasonError {
+	choice := resp.Choices[0]
+	if choice.Message == nil {
+		return DescribeResult{}, fmt.Errorf("chat: empty message")
+	}
+
+	d.log(ctx, "KRONK CHAT RESPONSE", "message content", choice.Message.Content, "finish reason", choice.FinishReason()) // TODO: Remove debug code
+
+	if choice.FinishReason() == model.FinishReasonError {
 		errMsg := ""
-		if resp.Choices[0].Delta != nil {
-			errMsg = resp.Choices[0].Delta.Content
-		} else if resp.Choices[0].Message != nil {
-			errMsg = resp.Choices[0].Message.Content
+		if choice.Delta != nil {
+			errMsg = choice.Delta.Content
+		} else if choice.Message != nil {
+			errMsg = choice.Message.Content
 		}
 		return DescribeResult{}, fmt.Errorf("describe: model error: %s", errMsg)
 	}
 
 	result := DescribeResult{
-		Description:        resp.Choices[0].Message.Content,
+		Description:        choice.Message.Content,
 		TimeToFirstTokenMS: resp.Usage.TimeToFirstTokenMS,
 		TokensPerSecond:    resp.Usage.TokensPerSecond,
 	}
