@@ -181,10 +181,12 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (DescribeRes
 		return DescribeResult{}, fmt.Errorf("chat: %w", chatErr)
 	}
 	if len(resp.Choices) == 0 {
+		d.log(ctx, "KRONK CHAT EMPTY CHOICES", "response", fmt.Sprintf("%#v", resp), "usage", fmt.Sprintf("%#v", resp.Usage)) // TODO: Remove debug code
 		return DescribeResult{}, fmt.Errorf("chat: empty response")
 	}
 
 	choice := resp.Choices[0]
+	d.log(ctx, "KRONK CHAT CHOICE", "choice", fmt.Sprintf("%#v", choice), "usage", fmt.Sprintf("%#v", resp.Usage)) // TODO: Remove debug code
 	if choice.Message == nil {
 		return DescribeResult{}, fmt.Errorf("chat: empty message")
 	}
