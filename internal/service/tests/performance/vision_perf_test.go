@@ -40,7 +40,7 @@ const (
 	ThresholdMinOutputTok = 20     // Flag if output tokens < this
 )
 
-var defaultMaxSizes = []int{64, 256} //64, 128, 256, 384, 512
+var defaultMaxSizes = []int{64} //64, 128, 256, 384, 512
 
 // defaultConfigs returns test config variants. The first entry always matches
 // the app defaults so one test row represents real production behavior.
@@ -417,12 +417,20 @@ func runSingleInference(ctx context.Context, krn *kronksdk.Kronk, imageData []by
 		run.Error = fmt.Sprintf("chat: %v", err)
 	}
 
-	if len(resp.Choices) > 0 && resp.Choices[0].FinishReason() == model.FinishReasonError {
+	if len(resp.Choices) == 0 {
+		run.Error = fmt.Sprintf("chat: empty response: response=%#v usage=%#v", resp, resp.Usage)
+		run.Flags.DecodeErrorCode = -98
+		run.Flags.DecodeErrorMsg = "empty response"
+		return run
+	}
+
+	choice := resp.Choices[0]
+	if choice.FinishReason() == model.FinishReasonError {
 		errMsg := ""
-		if resp.Choices[0].Delta != nil {
-			errMsg = resp.Choices[0].Delta.Content
-		} else if resp.Choices[0].Message != nil {
-			errMsg = resp.Choices[0].Message.Content
+		if choice.Delta != nil {
+			errMsg = choice.Delta.Content
+		} else if choice.Message != nil {
+			errMsg = choice.Message.Content
 		}
 		run.Error = fmt.Sprintf("decode error: %s", errMsg)
 		run.Flags.DecodeErrorMsg = errMsg
@@ -440,8 +448,26 @@ func runSingleInference(ctx context.Context, krn *kronksdk.Kronk, imageData []by
 		}
 	}
 
-	if len(resp.Choices) > 0 && resp.Choices[0].Message != nil {
-		run.Description = resp.Choices[0].Message.Content
+	if choice.Message == nil {
+		run.Error = fmt.Sprintf("chat: empty message: choice=%#v usage=%#v", choice, resp.Usage)
+		run.Flags.DecodeErrorCode = -97
+		run.Flags.DecodeErrorMsg = "empty message"
+		return run
+	}
+
+	run.Description = choice.Message.Content
+	if run.Description == "" {
+		run.Error = fmt.Sprintf("chat: blank message: choice=%#v usage=%#v", choice, resp.Usage)
+		run.Flags.DecodeErrorCode = -96
+		run.Flags.DecodeErrorMsg = "blank message"
+		return run
+	}
+
+	if resp.Usage == nil {
+		run.Error = fmt.Sprintf("chat: empty usage: choice=%#v", choice)
+		run.Flags.DecodeErrorCode = -95
+		run.Flags.DecodeErrorMsg = "empty usage"
+		return run
 	}
 
 	u := resp.Usage
