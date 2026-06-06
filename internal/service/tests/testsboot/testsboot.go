@@ -2,6 +2,7 @@
 package testsboot
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sync"
@@ -38,6 +39,17 @@ func Boot() {
 		if err := kronk.Init(Cfg); err != nil {
 			fmt.Printf("kronk init: %v\n", err)
 			os.Exit(1)
+		}
+
+		if info, err := kronk.Info(Cfg); err != nil {
+			Log(context.Background(), "system info unavailable", "error", err)
+		} else {
+			Log(context.Background(), "system info",
+				"processor", kronk.ActiveProcessor(),
+				"llamaCppVersion", info.Version,
+				"arch", info.Arch,
+				"os", info.OS,
+			)
 		}
 
 		paths, err := kronk.ResolvePaths(Cfg)

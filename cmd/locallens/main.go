@@ -43,10 +43,13 @@ func run() error {
 	var svc *service.Service
 	if err := kronk.Init(cfg); err != nil {
 		log(ctx, "kronk init failed, setup may be needed", "error", err)
-	} else if s, err := initService(ctx, log, cfg); err != nil {
-		log(ctx, "service init deferred, setup may be needed", "error", err)
 	} else {
-		svc = s
+		logSystemInfo(ctx, log, cfg)
+		if s, err := initService(ctx, log, cfg); err != nil {
+			log(ctx, "service init deferred, setup may be needed", "error", err)
+		} else {
+			svc = s
+		}
 	}
 
 	// Wire dependencies into the handler layer.
@@ -169,6 +172,25 @@ func setupRunner(ctx context.Context, log logger.Logger, req app.SetupRequest, p
 	log(ctx, "setup finished", "config saved")
 
 	return svc, nil
+}
+
+// logSystemInfo emits a one-time log of the active processor backend and the
+// installed llama.cpp library build (version/arch/os/processor). Called once
+// after a successful kronk.Init so the reported triple matches the loaded
+// runtime. Failures are logged but non-fatal.
+func logSystemInfo(ctx context.Context, log logger.Logger, cfg config.Config) {
+	info, err := kronk.Info(cfg)
+	if err != nil {
+		log(ctx, "system info unavailable", "error", err)
+		return
+	}
+
+	log(ctx, "system info",
+		"processor", kronk.ActiveProcessor(),
+		"llamaCppVersion", info.Version,
+		"arch", info.Arch,
+		"os", info.OS,
+	)
 }
 
 // initService resolves model file paths and creates the Service.

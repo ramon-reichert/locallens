@@ -23,6 +23,47 @@ type ModelPaths struct {
 	Embed  config.ModelFilePaths
 }
 
+// SystemInfo describes the llama.cpp library build resident in this process.
+type SystemInfo struct {
+	Version   string // llama.cpp library version (e.g. "b9247")
+	Arch      string // CPU architecture (e.g. "amd64")
+	OS        string // operating system (e.g. "windows")
+	Processor string // backend processor (e.g. "cuda", "vulkan", "cpu")
+}
+
+// Info reports the installed llama.cpp library metadata for the processor
+// selected by cfg (or KRONK_PROCESSOR). It reads the version.json of the
+// resolved per-triple install, mirroring how Init selects its library path.
+// Call after Init so the reported triple matches the loaded runtime.
+func Info(cfg config.Config) (SystemInfo, error) {
+	var opts []libs.Option
+
+	if processor := resolveProcessor(cfg); processor != "" {
+		p, err := defaults.Processor(processor)
+		if err != nil {
+			return SystemInfo{}, fmt.Errorf("parse processor %q: %w", processor, err)
+		}
+		opts = append(opts, libs.WithProcessor(p))
+	}
+
+	libsys, err := libs.New(opts...)
+	if err != nil {
+		return SystemInfo{}, fmt.Errorf("llama.cpp libs new: %w", err)
+	}
+
+	tag, err := libsys.InstalledVersion()
+	if err != nil {
+		return SystemInfo{}, fmt.Errorf("read installed libs version: %w", err)
+	}
+
+	return SystemInfo{
+		Version:   tag.Version,
+		Arch:      tag.Arch,
+		OS:        tag.OS,
+		Processor: tag.Processor,
+	}, nil
+}
+
 // activeProcessor records the processor name that was actually loaded into
 // the process by the first successful kronk.Init call. The Kronk SDK loads
 // the llama.cpp shared library exactly once per process and short-circuits

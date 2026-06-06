@@ -1,5 +1,8 @@
 # To-do:
 
+- Cross-platform CI with processor=cpu
+- Set a Locallens exclusive kronk libs path?
+- Set CPU as default processor, warning the user in the setup panel;
 - Check "per-request allocation" error with vulkan (and maybe other processors) -> T-019dfff7-3572-72cc-bede-689295bad366 -> pinned to kronk v1.24.8, last version before the bug. Possible fix committed in local branch "vulkan_bug" in both kronk AND locallens repos. Llama.cpp pinned to version b9247 for compatibility.
 - Adjust embedding flow to be more accurate. Maybe using grammar (Kronk);
 - Make performance tests for the embedding too;

@@ -177,6 +177,7 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (DescribeRes
 		}()
 
 		resp, _ = krn.Chat(ctx, data)
+		// resp, err = krn.Chat(ctx, data)
 		//	if err != nil {
 		//		return DescribeResult{}, fmt.Errorf("chat: %w", err)
 		//	}
