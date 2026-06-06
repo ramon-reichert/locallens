@@ -114,6 +114,7 @@ func DefaultBasePath() string {
 func Defaults() Config {
 	return Config{
 		BasePath:        DefaultBasePath(),
+		Processor:       "cpu",
 		LlamaCppVersion: "b9247",
 		ModelsURLs: Models{
 			VisionModelURL: "https://huggingface.co/ggml-org/Qwen2-VL-2B-Instruct-GGUF/resolve/main/Qwen2-VL-2B-Instruct-Q4_K_M.gguf",

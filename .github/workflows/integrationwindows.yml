@@ -33,6 +33,7 @@ jobs:
         if: steps.cache-kronk.outputs.cache-hit != 'true'
         env:
           CGO_ENABLED: 0
+          KRONK_PROCESSOR: cpu
         run: go run ./cmd/setup/
 
       - name: Save Kronk cache
@@ -45,4 +46,5 @@ jobs:
       - name: Run service tests
         env:
           CGO_ENABLED: 0
+          KRONK_PROCESSOR: cpu
         run: go test -timeout 30m -v -count=1 ./internal/service/tests

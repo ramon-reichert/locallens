@@ -71,8 +71,11 @@
                 <label for="setup-processor">Processor</label>
                 <select id="setup-processor"></select>
                 <p class="setup-hint">
-                    Hardware backend used by the AI models. Auto-detected from your machine.
-                    Switch to <strong>cpu</strong> if the GPU backend is unstable or runs out of memory.
+                    Hardware backend used by the AI models. <strong>cpu</strong> is the default
+                    and always-safe choice &mdash; it works on any machine. If your hardware
+                    supports it, you can try the auto-detected backend (or another compatible
+                    option) for potentially much faster results. If it turns out unstable or
+                    runs out of memory, simply switch back to <strong>cpu</strong>.
                 </p>
             </div>
             <div id="folder-picker" class="folder-picker hidden">

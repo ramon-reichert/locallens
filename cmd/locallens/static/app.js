@@ -113,8 +113,10 @@ function populateProcessorOptions(detected, saved) {
         setupProcessor.appendChild(el);
     }
 
-    // Prefer the saved (config.json) value, fall back to the detected default.
-    setupProcessor.value = PROCESSOR_OPTIONS.includes(saved) ? saved : detected;
+    // Prefer the saved (config.json) value. Otherwise default to the
+    // always-safe "cpu" backend rather than the auto-detected GPU, which the
+    // user can still opt into explicitly for faster results.
+    setupProcessor.value = PROCESSOR_OPTIONS.includes(saved) ? saved : "cpu";
 }
 
 function updateSetupBadge() {
