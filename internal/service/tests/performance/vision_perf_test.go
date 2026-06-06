@@ -236,24 +236,26 @@ func TestVisionPerformance(t *testing.T) {
 		fmt.Printf("    Model: %s | Type: %s | VRAM: %.1f MB | KV Slots: %.1f MB\n\n",
 			mi.ID, mi.Type, float64(mi.VRAMTotal)/(1024*1024), float64(slotMem)/(1024*1024))
 
-		// Warmup: run a tiny inference to trigger lazy initialization (projector
-		// loading, GPU buffer allocation, etc.) so the first real measurement is
-		// not penalized by one-time startup costs.
-		warmupImage, warmupErr := image.Resize(images[0], 64)
-		if warmupErr == nil {
-			fmt.Printf("    Warmup run...")
-			warmupStart := time.Now()
-			warmupData := model.D{
-				"messages": []model.D{
-					{"role": "user", "content": warmupImage},
-					{"role": "user", "content": "hi"},
-				},
-				"temperature": 0.0,
-				"max_tokens":  1,
+		/*
+			// Warmup: run a tiny inference to trigger lazy initialization (projector
+			// loading, GPU buffer allocation, etc.) so the first real measurement is
+			// not penalized by one-time startup costs.
+			warmupImage, warmupErr := image.Resize(images[0], 64)
+			if warmupErr == nil {
+				fmt.Printf("    Warmup run...")
+				warmupStart := time.Now()
+				warmupData := model.D{
+					"messages": []model.D{
+						{"role": "user", "content": warmupImage},
+						{"role": "user", "content": "hi"},
+					},
+					"temperature": 0.0,
+					"max_tokens":  1,
+				}
+				krn.Chat(ctx, warmupData)
+				fmt.Printf(" done (%dms)\n\n", time.Since(warmupStart).Milliseconds())
 			}
-			krn.Chat(ctx, warmupData)
-			fmt.Printf(" done (%dms)\n\n", time.Since(warmupStart).Milliseconds())
-		}
+		*/
 
 		for _, maxSize := range defaultMaxSizes {
 
