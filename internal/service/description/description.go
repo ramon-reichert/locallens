@@ -146,11 +146,9 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (DescribeRes
 		return DescribeResult{}, fmt.Errorf("resize image: %w", err)
 	}
 
-	messages := []model.D{
-		{"role": "system", "content": p.SystemPrompt},
-		{"role": "user", "content": imageData},
-		{"role": "user", "content": p.UserPrompt},
-	}
+	messages := []model.D{}
+	messages = append(messages, model.TextMessage(model.RoleSystem, p.SystemPrompt))
+	messages = append(messages, model.ImageMessage(p.UserPrompt, imageData, "jpg")...)
 
 	data := model.D{
 		"messages":    messages,

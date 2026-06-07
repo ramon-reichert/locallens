@@ -131,7 +131,7 @@ func Defaults() Config {
 		Embed: EmbedModelConfig{
 			ContextWindow:  2048, // TODO: Check this config at model provider site
 			NBatch:         2048,
-			NUBatch:        512,
+			NUBatch:        2048,
 			CacheTypeK:     "Q8_0",
 			CacheTypeV:     "Q8_0",
 			FlashAttention: true,
