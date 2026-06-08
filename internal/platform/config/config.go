@@ -138,12 +138,12 @@ func Defaults() Config {
 		},
 		Prompt: VisionPrompt{
 			SystemPrompt: "You extract image keywords for semantic search.",
-			UserPrompt:   "What do you see in this picture?", //"Describe this image in detail. Include: objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.",
+			UserPrompt:   "Describe this image in detail. Include: objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.",
 			MaxTokens:    300,
 			Temperature:  0.1,
 		},
 		Image: ImageConfig{
-			MaxSide: 64,
+			MaxSide: 128,
 			Quality: 90,
 		},
 	}

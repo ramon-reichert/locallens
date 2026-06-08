@@ -151,13 +151,16 @@ func (h *Handlers) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 	progress := func(p service.IndexProgressInfo) {
 		send(map[string]any{
-			"type":    "progress",
-			"stage":   p.Stage,
-			"folder":  p.Folder,
-			"current": p.Current,
-			"done":    p.Done,
-			"total":   p.Total,
-			"etaMs":   p.ETA.Milliseconds(),
+			"type":      "progress",
+			"stage":     p.Stage,
+			"folder":    p.Folder,
+			"current":   p.Current,
+			"done":      p.Done,
+			"failed":    p.Failed,
+			"processed": p.Processed,
+			"total":     p.Total,
+			"etaMs":     p.ETA.Milliseconds(),
+			"error":     p.Error,
 		})
 	}
 
@@ -172,16 +175,28 @@ func (h *Handlers) handleIndex(w http.ResponseWriter, r *http.Request) {
 	// r.Context() is cancelled when the client closes the connection (e.g.,
 	// the user hits Stop in the UI). The Service checks ctx.Done() between
 	// images and returns context.Canceled once the in-flight image completes.
-	count, err := svc.IndexFolder(r.Context(), req.Folder, progress)
+	result, err := svc.IndexFolder(r.Context(), req.Folder, progress)
+	resultEvent := func(eventType string) map[string]any {
+		return map[string]any{
+			"type":         eventType,
+			"count":        result.IndexedTotal,
+			"indexedTotal": result.IndexedTotal,
+			"added":        result.Added,
+			"failed":       result.Failed,
+			"total":        result.Total,
+		}
+	}
 
 	switch {
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
-		send(map[string]any{"type": "cancelled", "count": count})
+		send(resultEvent("cancelled"))
 	case err != nil:
 		h.log(r.Context(), "index error", "folder", req.Folder, "error", err)
-		send(map[string]any{"type": "error", "error": err.Error(), "count": count})
+		event := resultEvent("error")
+		event["error"] = err.Error()
+		send(event)
 	default:
-		send(map[string]any{"type": "done", "count": count})
+		send(resultEvent("done"))
 	}
 }
 
@@ -309,7 +324,7 @@ func (h *Handlers) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 	h.mu.RUnlock()
 
 	writeJSON(w, http.StatusOK, struct {
-		Complete bool   `json:"complete"`
+		Complete bool `json:"complete"`
 		SetupStatusInfo
 	}{
 		Complete:        ready,

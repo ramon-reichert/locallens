@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"runtime/debug"
 	"sync"
 	"time"
 
@@ -130,12 +129,6 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (DescribeRes
 		return DescribeResult{}, ErrModelNotLoaded
 	}
 
-	d.log(ctx, ". . . . . . .")
-	d.log(ctx, ". . . . . . .")
-	d.log(ctx, "KRONK MODEL CONFIG", "config", krn.ModelConfig()) // TODO: Remove debug code
-	d.log(ctx, ". . . . . . .")
-	d.log(ctx, ". . . . . . .")
-
 	p := d.prompt
 	maxSide := d.maxSide
 
@@ -158,40 +151,17 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (DescribeRes
 
 	start := time.Now()
 
-	d.log(ctx, "CALLING KRONK CHAT", "temperature", p.Temperature, "max_tokens", p.MaxTokens, "system prompt", p.SystemPrompt, "user prompt", p.UserPrompt, "imageData", len(imageData)) // TODO: Remove debug code
-
-	var resp model.ChatResponse
-	var chatErr error
-
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				d.log(ctx, "PANIC INSIDE KRONK CHAT", "panic", r, "stack", string(debug.Stack()))
-				panic(r)
-			}
-		}()
-
-		resp, chatErr = krn.Chat(ctx, data)
-	}()
-
-	d.log(ctx, "RETURNED FROM KRONK CHAT", "error", chatErr, "choices", len(resp.Choices)) // TODO: Remove debug code
-	if chatErr != nil {
-		return DescribeResult{}, fmt.Errorf("chat: %w", chatErr)
+	resp, err := krn.Chat(ctx, data)
+	if err != nil {
+		return DescribeResult{}, fmt.Errorf("chat: %w", err)
 	}
 	if len(resp.Choices) == 0 {
-		d.log(ctx, "KRONK CHAT EMPTY CHOICES", "response", fmt.Sprintf("%#v", resp), "usage", fmt.Sprintf("%#v", resp.Usage)) // TODO: Remove debug code
 		return DescribeResult{}, fmt.Errorf("chat: empty response")
 	}
 
 	choice := resp.Choices[0]
-	d.log(ctx, "KRONK CHAT CHOICE", "choice", fmt.Sprintf("%#v", choice), "usage", fmt.Sprintf("%#v", resp.Usage)) // TODO: Remove debug code
-	if choice.Message == nil {
-		return DescribeResult{}, fmt.Errorf("chat: empty message")
-	}
-
-	d.log(ctx, "KRONK CHAT RESPONSE", "message content", choice.Message.Content, "finish reason", choice.FinishReason()) // TODO: Remove debug code
-
-	if choice.FinishReason() == model.FinishReasonError {
+	switch {
+	case choice.FinishReason() == model.FinishReasonError:
 		errMsg := ""
 		if choice.Delta != nil {
 			errMsg = choice.Delta.Content
@@ -199,6 +169,12 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (DescribeRes
 			errMsg = choice.Message.Content
 		}
 		return DescribeResult{}, fmt.Errorf("describe: model error: %s", errMsg)
+	case choice.Message == nil:
+		return DescribeResult{}, fmt.Errorf("chat: empty message")
+	case choice.Message.Content == "":
+		return DescribeResult{}, fmt.Errorf("chat: blank message")
+	case resp.Usage == nil:
+		return DescribeResult{}, fmt.Errorf("chat: empty usage")
 	}
 
 	result := DescribeResult{

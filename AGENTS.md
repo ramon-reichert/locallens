@@ -93,6 +93,10 @@ make test-performance-similarity   # Embedding similarity quality tests
 - **Performance tests** (`tests/performance/`): Benchmark across config variants
   and image sizes. Track TTFT, generation time, tokens/sec, memory pressure.
   A warmup inference runs before measurements to exclude model loading from TTFT.
+- **cross-platform CI**: GitHub's standard arm64 macOS runners are extremely slow for
+  Qwen2-VL vision inference, do not reflecting real behavior. Keep macOs+Windows+Linux CI 
+  to build/unit checks, but whole integration (setup+service) tests just for Linux; 
+  Windows is not necessary because is already tested in the developer machine.
 
 ## Kronk SDK usage
 
@@ -116,23 +120,31 @@ local vision and embedding inference.
 
 ```go
 // Build message list with image bytes and text prompts
-messages := []model.D{
-    {"role": "system", "content": systemPrompt},
-    {"role": "user", "content": imageBytes},    // []byte from image.Resize
-    {"role": "user", "content": userPrompt},
-}
+messages := []model.D{}
+messages = append(messages, model.TextMessage(model.RoleSystem, systemPrompt))
+messages = append(messages, model.ImageMessage(userPrompt, imageBytes, "jpg")...)
+
 data := model.D{
     "messages":    messages,
     "temperature": temperature,
     "max_tokens":  maxTokens,
 }
 resp, err := krn.Chat(ctx, data)
+if err != nil { ... }
+if len(resp.Choices) == 0 { ... } // empty response is a real error
 
-// Check for decode errors (KV cache exhaustion, etc.)
-if resp.Choices[0].FinishReason() == model.FinishReasonError { ... }
+choice := resp.Choices[0]
+switch {
+case choice.FinishReason() == model.FinishReasonError:
+    ... // KV/cache/model decode errors
+case choice.Message == nil || choice.Message.Content == "":
+    ... // empty/blank message is a real error
+case resp.Usage == nil:
+    ... // metrics are required by LocalLens
+}
 
 // Extract results
-description := resp.Choices[0].Message.Content
+description := choice.Message.Content
 ttft        := resp.Usage.TimeToFirstTokenMS
 tps         := resp.Usage.TokensPerSecond
 ```
@@ -322,8 +334,9 @@ The indexing pipeline is built around four properties:
 
 ### Progress reporting
 
-`Service.IndexFolder` accepts an `IndexProgress` callback (`func(IndexProgressInfo)`),
-invoked at two stages per image:
+`Service.IndexFolder` returns `IndexResult{IndexedTotal, Added, Failed, Total}`
+and accepts an `IndexProgress` callback (`func(IndexProgressInfo)`), invoked at
+these stages per image:
 
 - `Stage: "describing"` — fired right before the vision-model call. Used to
   show "Describing image X/N — file.jpg" in the UI status. ETA is not set
@@ -331,8 +344,11 @@ invoked at two stages per image:
 - `Stage: "indexed"` — fired after `idx.Save()`. Increments the running
   counter and computes a running-average ETA over completed images. Used to
   advance the progress bar and flip the per-file ✅ marker.
+- `Stage: "failed"` — fired when describe/embed returns an error. The image is
+  skipped, indexing continues, and the final UI summary reports the failure count.
 
-`IndexProgressInfo` fields: `Stage`, `Folder`, `Current`, `Done`, `Total`, `ETA`.
+`IndexProgressInfo` fields: `Stage`, `Folder`, `Current`, `Done`, `Failed`,
+`Processed`, `Total`, `ETA`, `Error`.
 
 `Total` is computed upfront by `countNewImages()`, which walks the folder's
 image list and excludes entries already present in the cached index. When
@@ -347,10 +363,10 @@ emits the following JSON events:
 | Event       | When                                       | Payload fields                              |
 |-------------|--------------------------------------------|---------------------------------------------|
 | `started`   | Immediately, before any work               | `folder`                                    |
-| `progress`  | Per image, twice (describing + indexed)    | `stage`, `folder`, `current`, `done`, `total`, `etaMs` |
-| `done`      | All work finished successfully             | `count`                                     |
-| `cancelled` | Context cancelled (user Stop)              | `count`                                     |
-| `error`     | Any other error                            | `error`, `count`                            |
+| `progress`  | Per image stage update                     | `stage`, `folder`, `current`, `done`, `failed`, `processed`, `total`, `etaMs`, `error` |
+| `done`      | All work finished successfully             | `count`, `indexedTotal`, `added`, `failed`, `total` |
+| `cancelled` | Context cancelled (user Stop)              | `count`, `indexedTotal`, `added`, `failed`, `total` |
+| `error`     | Any fatal error                            | `error`, `count`, `indexedTotal`, `added`, `failed`, `total` |
 
 The `started` event is sent before the (slow) vision-model load specifically
 so the browser's `await fetch(...)` resolves immediately and the UI can show

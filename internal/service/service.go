@@ -86,18 +86,29 @@ func New(ctx context.Context, cfg Config) (*Service, error) {
 // Already-indexed images that were skipped on resume don't trigger callbacks
 // and don't contribute to either Done or Total.
 type IndexProgressInfo struct {
-	Stage   string        // "describing" or "indexed"
-	Folder  string        // current folder being processed
-	Current string        // path of the image being processed
-	Done    int           // newly indexed images so far
-	Total   int           // total new images to index across all folders in this call
-	ETA     time.Duration // estimated remaining time (only set when Stage == "indexed")
+	Stage     string        // "describing" or "indexed"
+	Folder    string        // current folder being processed
+	Current   string        // path of the image being processed
+	Done      int           // newly indexed images so far
+	Failed    int           // images that failed during this indexing run
+	Processed int           // images completed or failed during this indexing run
+	Total     int           // total new images to index across all folders in this call
+	ETA       time.Duration // estimated remaining time (only set when Stage == "indexed")
+	Error     string        // failure reason when Stage == "failed"
 }
 
 // IndexProgress is invoked at multiple points per image: once when the image
 // is about to be described (Stage="describing") and once after it has been
 // fully indexed and saved (Stage="indexed"). Pass nil to disable reporting.
 type IndexProgress func(IndexProgressInfo)
+
+// IndexResult summarizes one indexing run.
+type IndexResult struct {
+	IndexedTotal int // total entries in the folder index after the run
+	Added        int // newly described, embedded, and saved images in this run
+	Failed       int // new images skipped after describe/embed errors in this run
+	Total        int // new images considered in this run
+}
 
 // IndexFolder indexes the images directly inside folderPath (non-recursive).
 // It loads the vision model, processes the folder, saves the .locallens.index
@@ -107,27 +118,26 @@ type IndexProgress func(IndexProgressInfo)
 // If progress is non-nil, it is invoked after each image is saved with a
 // running ETA. If ctx is cancelled, indexing returns ctx.Err() after the
 // in-flight image; all images saved up to that point are durable.
-func (s *Service) IndexFolder(ctx context.Context, folderPath string, progress IndexProgress) (int, error) {
+func (s *Service) IndexFolder(ctx context.Context, folderPath string, progress IndexProgress) (IndexResult, error) {
 	total, err := s.countNewImages([]string{folderPath})
 	if err != nil {
-		return 0, err
+		return IndexResult{}, err
 	}
 
 	// Nothing new to index — skip loading the vision model entirely.
 	if total == 0 {
 		idx, err := s.loadIndex(folderPath)
 		if err != nil {
-			return 0, err
+			return IndexResult{}, err
 		}
 		s.log(ctx, "index folder", "folder", folderPath, "indexed images", idx.Len(), "new images", 0)
-		return idx.Len(), nil
+		return IndexResult{IndexedTotal: idx.Len()}, nil
 	}
 
 	if err := s.describer.Load(ctx); err != nil {
-		return 0, fmt.Errorf("load describer: %w", err)
+		return IndexResult{}, fmt.Errorf("load describer: %w", err)
 	}
 	defer func() {
-		s.log(ctx, "CALLING UNLOAD") // TODO: Remove debug code
 		if err := s.describer.Unload(ctx); err != nil {
 			s.log(ctx, "unload describer error", "error", err)
 		}
@@ -145,15 +155,15 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string, progress I
 //
 // If ctx is cancelled, the loop returns ctx.Err() at the start of the next
 // iteration; images already saved remain durable.
-func (s *Service) indexFolder(ctx context.Context, folderPath string, tracker *indexProgressTracker) (int, error) {
+func (s *Service) indexFolder(ctx context.Context, folderPath string, tracker *indexProgressTracker) (IndexResult, error) {
 	images, err := findImagesIn(folderPath)
 	if err != nil {
-		return 0, fmt.Errorf("find images: %w", err)
+		return IndexResult{}, fmt.Errorf("find images: %w", err)
 	}
 
 	if len(images) == 0 {
 		s.log(ctx, "no images found", "folder", folderPath)
-		return 0, nil
+		return IndexResult{}, nil
 	}
 
 	start := time.Now()
@@ -161,21 +171,20 @@ func (s *Service) indexFolder(ctx context.Context, folderPath string, tracker *i
 
 	idx, err := s.loadIndex(folderPath)
 	if err != nil {
-		return 0, fmt.Errorf("load index %q: %w", folderPath, err)
+		return IndexResult{}, fmt.Errorf("load index %q: %w", folderPath, err)
 	}
-
-	s.log(ctx, "INDEX LOADED") // TODO: Remove debug code
 
 	// Per-image describe → embed → add → save. Saving after each image makes
 	// progress durable: a crash after image N leaves images 1..N persisted,
 	// and the existing-entry skip below resumes from N+1 on restart.
 	var sumTTFT, sumTPS, sumEmbedMS float64
 	described := 0
+	failed := 0
 
 	for _, imgPath := range images {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			s.log(ctx, "index folder cancelled", "folder", folderPath, "indexed images", idx.Len(), "described in run", described)
-			return idx.Len(), ctxErr
+			return IndexResult{IndexedTotal: idx.Len(), Added: described, Failed: failed, Total: tracker.total}, ctxErr
 		}
 
 		if _, exists := idx.Get(imgPath); exists {
@@ -194,6 +203,8 @@ func (s *Service) indexFolder(ctx context.Context, folderPath string, tracker *i
 		imgCancel()
 		if err != nil {
 			s.log(ctx, "describe error", "path", imgPath, "error", err)
+			failed++
+			tracker.recordFailed(imgPath, time.Since(imgStart), err)
 			continue
 		}
 
@@ -204,6 +215,8 @@ func (s *Service) indexFolder(ctx context.Context, folderPath string, tracker *i
 		embedCancel()
 		if err != nil {
 			s.log(ctx, "embed error", "path", imgPath, "error", err)
+			failed++
+			tracker.recordFailed(imgPath, time.Since(imgStart), err)
 			continue
 		}
 
@@ -216,7 +229,7 @@ func (s *Service) indexFolder(ctx context.Context, folderPath string, tracker *i
 		})
 
 		if err := idx.Save(); err != nil {
-			return idx.Len(), fmt.Errorf("save index: %w", err)
+			return IndexResult{IndexedTotal: idx.Len(), Added: described, Failed: failed, Total: tracker.total}, fmt.Errorf("save index: %w", err)
 		}
 
 		sumTTFT += descResult.TimeToFirstTokenMS
@@ -230,6 +243,7 @@ func (s *Service) indexFolder(ctx context.Context, folderPath string, tracker *i
 	}
 
 	total := idx.Len()
+	result := IndexResult{IndexedTotal: total, Added: described, Failed: failed, Total: tracker.total}
 
 	// Log summary with timing breakdown from Kronk metrics.
 	if described > 0 {
@@ -239,16 +253,17 @@ func (s *Service) indexFolder(ctx context.Context, folderPath string, tracker *i
 			"folder", folderPath,
 			"\nindexed images", total,
 			"\ndescribed", described,
+			"\nfailed", failed,
 			"\navg ttft ms", sumTTFT/n,
 			"\navg tok/s", sumTPS/n,
 			"\navg embed ms", sumEmbedMS/n,
 			"\nelapsed time", elapsed,
 			"\navg time/img", elapsed/time.Duration(n))
 	} else {
-		s.log(ctx, "\n=============\nindex folder", "folder", folderPath, "\nindexed images", total, "\nelapsed time", time.Since(start))
+		s.log(ctx, "\n=============\nindex folder", "folder", folderPath, "\nindexed images", total, "\ndescribed", described, "\nfailed", failed, "\nelapsed time", time.Since(start))
 	}
 
-	return total, nil
+	return result, nil
 }
 
 // countNewImages returns the total number of images across the given folders
@@ -282,6 +297,7 @@ type indexProgressTracker struct {
 	folder     string
 	total      int
 	done       int
+	failed     int
 	sumElapsed time.Duration
 }
 
@@ -290,11 +306,13 @@ func (t *indexProgressTracker) describing(imgPath string) {
 		return
 	}
 	t.callback(IndexProgressInfo{
-		Stage:   "describing",
-		Folder:  t.folder,
-		Current: imgPath,
-		Done:    t.done,
-		Total:   t.total,
+		Stage:     "describing",
+		Folder:    t.folder,
+		Current:   imgPath,
+		Done:      t.done,
+		Failed:    t.failed,
+		Processed: t.done + t.failed,
+		Total:     t.total,
 	})
 }
 
@@ -313,12 +331,42 @@ func (t *indexProgressTracker) indexed(imgPath string, imgElapsed time.Duration)
 		eta = avg * time.Duration(t.total-t.done)
 	}
 	t.callback(IndexProgressInfo{
-		Stage:   "indexed",
-		Folder:  t.folder,
-		Current: imgPath,
-		Done:    t.done,
-		Total:   t.total,
-		ETA:     eta,
+		Stage:     "indexed",
+		Folder:    t.folder,
+		Current:   imgPath,
+		Done:      t.done,
+		Failed:    t.failed,
+		Processed: t.done + t.failed,
+		Total:     t.total,
+		ETA:       eta,
+	})
+}
+
+func (t *indexProgressTracker) recordFailed(imgPath string, imgElapsed time.Duration, err error) {
+	if t == nil {
+		return
+	}
+	t.failed++
+	t.sumElapsed += imgElapsed
+	if t.callback == nil {
+		return
+	}
+	var eta time.Duration
+	processed := t.done + t.failed
+	if processed > 0 && t.total > processed {
+		avg := t.sumElapsed / time.Duration(processed)
+		eta = avg * time.Duration(t.total-processed)
+	}
+	t.callback(IndexProgressInfo{
+		Stage:     "failed",
+		Folder:    t.folder,
+		Current:   imgPath,
+		Done:      t.done,
+		Failed:    t.failed,
+		Processed: processed,
+		Total:     t.total,
+		ETA:       eta,
+		Error:     err.Error(),
 	})
 }
 

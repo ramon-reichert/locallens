@@ -71,13 +71,13 @@ func TestMain(m *testing.M) {
 	progress := func(p service.IndexProgressInfo) {
 		indexProgressEvents = append(indexProgressEvents, p)
 	}
-	count, err := svc.IndexFolder(ctx, testFolder, progress)
+	result, err := svc.IndexFolder(ctx, testFolder, progress)
 	if err != nil {
 		fmt.Printf("index folder: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("\n===== TEST MAIN > IndexFolder completed with: %d indexed images =====\n\n", count)
+	fmt.Printf("\n===== TEST MAIN > IndexFolder completed with: %d indexed images (%d new, %d failed) =====\n\n", result.IndexedTotal, result.Added, result.Failed)
 
 	code := m.Run()
 

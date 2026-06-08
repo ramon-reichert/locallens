@@ -61,16 +61,16 @@ func TestSimilarity(t *testing.T) {
 	defer svc.Close(ctx)
 
 	// Index the folder
-	count, err := svc.IndexFolder(ctx, tmp, nil)
+	result, err := svc.IndexFolder(ctx, tmp, nil)
 	if err != nil {
 		t.Fatalf("index folder: %v", err)
 	}
 
-	if count == 0 {
+	if result.IndexedTotal == 0 {
 		t.Fatal("no images indexed")
 	}
 
-	fmt.Printf("indexed %d images\n", count)
+	fmt.Printf("indexed %d images (%d new, %d failed)\n", result.IndexedTotal, result.Added, result.Failed)
 
 	// Load entries for CSV export
 	idx := index.New(filepath.Join(tmp, ".locallens.index"))

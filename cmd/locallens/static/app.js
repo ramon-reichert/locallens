@@ -866,24 +866,28 @@ async function indexFolder() {
                             // so we'd just overwrite the previous valid ETA
                             // with "—".
                             folderStatus.textContent = formatDescribing(event);
-                        } else {
+                        } else if (event.stage === "indexed") {
                             // stage === "indexed": image fully saved.
                             // Update progress bar (value + ETA) and flip
                             // the per-image checkbox.
                             finalCount = event.done;
                             markImageIndexed(event.current);
-                            showProgress(event.done, event.total, event.etaMs);
+                            showProgress(event.processed ?? event.done, event.total, event.etaMs);
+                        } else if (event.stage === "failed") {
+                            finalCount = event.done;
+                            folderStatus.textContent = `${event.done} indexed, ${event.failed} failed`;
+                            showProgress(event.processed ?? (event.done + event.failed), event.total, event.etaMs);
                         }
                         break;
                     case "done":
                         finalCount = event.count;
-                        folderStatus.textContent = `${event.count} images indexed`;
+                        folderStatus.textContent = formatIndexSummary(event);
                         hideProgress();
                         break outer;
                     case "cancelled":
                         finalCount = event.count;
                         stopped = true;
-                        folderStatus.textContent = `Stopped — ${event.count} images indexed`;
+                        folderStatus.textContent = `Stopped — ${formatIndexSummary(event)}`;
                         hideProgress();
                         break outer;
                     case "error":
@@ -931,6 +935,16 @@ function formatDescribing(p) {
     const next = p.done + 1;
     const file = p.current ? ` — ${shortenPath(p.current)}` : "";
     return `Describing image ${next}/${p.total}${file}`;
+}
+
+function formatIndexSummary(event) {
+    const count = event.count ?? event.indexedTotal ?? 0;
+    const added = event.added ?? 0;
+    const failed = event.failed ?? 0;
+    if (failed > 0) {
+        return `${count} images indexed (${added} new, ${failed} failed)`;
+    }
+    return `${count} images indexed`;
 }
 
 // markImageIndexed flips the ✅ marker on the row and the result card for the
