@@ -124,21 +124,21 @@ func Defaults() Config {
 		Vision: VisionModelConfig{ // TODO: Check this config at model provider site
 			ContextWindow: 8192,
 			NBatch:        2048,
-			NUBatch:       1024,
+			NUBatch:       2048,
 			CacheTypeK:    "Q8_0", // K cache is highly sensitive to quantization (llama.cpp PR #7412); Q4_0 causes hallucinations on Qwen2-VL due to aggressive GQA (2 KV heads / 14 attn heads)
 			CacheTypeV:    "Q8_0",
 		},
 		Embed: EmbedModelConfig{
 			ContextWindow:  2048, // TODO: Check this config at model provider site
 			NBatch:         2048,
-			NUBatch:        2048,
+			NUBatch:        512,
 			CacheTypeK:     "Q8_0",
 			CacheTypeV:     "Q8_0",
 			FlashAttention: true,
 		},
 		Prompt: VisionPrompt{
 			SystemPrompt: "You extract image keywords for semantic search.",
-			UserPrompt:   "Describe this image in detail. Include: objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.",
+			UserPrompt:   "What do you see in this picture?", //"Describe this image in detail. Include: objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.",
 			MaxTokens:    300,
 			Temperature:  0.1,
 		},
