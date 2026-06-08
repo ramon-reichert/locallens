@@ -36,7 +36,7 @@ type SystemInfo struct {
 // resolved per-triple install, mirroring how Init selects its library path.
 // Call after Init so the reported triple matches the loaded runtime.
 func Info(cfg config.Config) (SystemInfo, error) {
-	var opts []libs.Option
+	opts := []libs.Option{libs.WithBasePath(cfg.BasePath)}
 
 	if processor := resolveProcessor(cfg); processor != "" {
 		p, err := defaults.Processor(processor)
@@ -85,11 +85,14 @@ func ActiveProcessor() string {
 func Init(cfg config.Config) error {
 	processor := resolveProcessor(cfg)
 	if processor == "" {
-		if err := kronk.Init(); err != nil {
+		libsys, err := libs.New(libs.WithBasePath(cfg.BasePath))
+		if err != nil {
+			return fmt.Errorf("llama.cpp libs new: %w", err)
+		}
+
+		if err := kronk.Init(kronk.WithLibPath(libsys.LibsPath())); err != nil {
 			return err
 		}
-		// kronk.Init with no opts resolves the lib path via
-		// defaults.Processor(""), which falls back to "cpu".
 		if activeProcessor == "" {
 			activeProcessor = "cpu"
 		}
@@ -101,7 +104,7 @@ func Init(cfg config.Config) error {
 		return fmt.Errorf("parse processor %q: %w", processor, err)
 	}
 
-	libsys, err := libs.New(libs.WithProcessor(p))
+	libsys, err := libs.New(libs.WithBasePath(cfg.BasePath), libs.WithProcessor(p))
 	if err != nil {
 		return fmt.Errorf("llama.cpp libs new: %w", err)
 	}
@@ -127,7 +130,10 @@ func InstallDependencies(ctx context.Context, log logger.Logger, cfg config.Conf
 
 	log(ctx, "installing dependencies", "processor", processor)
 
-	opts := []libs.Option{libs.WithVersion(defaults.LibVersion(cfg.LlamaCppVersion))}
+	opts := []libs.Option{
+		libs.WithBasePath(cfg.BasePath),
+		libs.WithVersion(defaults.LibVersion(cfg.LlamaCppVersion)),
+	}
 
 	if processor != "" {
 		p, err := defaults.Processor(processor)

@@ -26,7 +26,7 @@ jobs:
         id: cache-kronk
         uses: actions/cache/restore@v5
         with:
-          path: ~/.kronk
+          path: ~/.locallens/kronk
           key: Linux-kronk-b9247-v1
 
       - name: Setup LocalLens dependencies
@@ -40,7 +40,7 @@ jobs:
         if: steps.cache-kronk.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
         with:
-          path: ~/.kronk
+          path: ~/.locallens/kronk
           key: Linux-kronk-b9247-v1
 
       - name: Run service tests

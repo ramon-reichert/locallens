@@ -107,7 +107,7 @@ func DefaultBasePath() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".kronk")
+	return filepath.Join(home, appDir, "kronk")
 }
 
 // Defaults returns the default configuration with sensible values.

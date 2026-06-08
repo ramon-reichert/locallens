@@ -53,7 +53,9 @@ internal/platform/
 ## Configuration
 
 All config lives in `internal/platform/config/config.go`. At runtime, defaults
-are overlaid with `~/.locallens/config.json`. `config.Load()` returns
+are overlaid with `~/.locallens/config.json`. LocalLens stores Kronk models and
+llama.cpp libraries under `~/.locallens/kronk` by default, isolated from
+Kronk's own `~/.kronk` directory. `config.Load()` returns
 `(Config, error)` — callers must handle the error (log a warning and continue
 with defaults). Config holds only static admin-set values; runtime state (e.g.,
 whether setup is complete) is derived from system state, not persisted in config.

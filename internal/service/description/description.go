@@ -155,26 +155,10 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (DescribeRes
 	if err != nil {
 		return DescribeResult{}, fmt.Errorf("chat: %w", err)
 	}
-	if len(resp.Choices) == 0 {
-		return DescribeResult{}, fmt.Errorf("chat: empty response")
-	}
 
-	choice := resp.Choices[0]
-	switch {
-	case choice.FinishReason() == model.FinishReasonError:
-		errMsg := ""
-		if choice.Delta != nil {
-			errMsg = choice.Delta.Content
-		} else if choice.Message != nil {
-			errMsg = choice.Message.Content
-		}
-		return DescribeResult{}, fmt.Errorf("describe: model error: %s", errMsg)
-	case choice.Message == nil:
-		return DescribeResult{}, fmt.Errorf("chat: empty message")
-	case choice.Message.Content == "":
-		return DescribeResult{}, fmt.Errorf("chat: blank message")
-	case resp.Usage == nil:
-		return DescribeResult{}, fmt.Errorf("chat: empty usage")
+	choice, err := validateChatResponse(resp)
+	if err != nil {
+		return DescribeResult{}, err
 	}
 
 	result := DescribeResult{
@@ -186,4 +170,30 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (DescribeRes
 	d.log(ctx, "describe image", "elapsed time", time.Since(start), "description", result.Description)
 
 	return result, nil
+}
+
+func validateChatResponse(resp model.ChatResponse) (model.Choice, error) {
+	if len(resp.Choices) == 0 {
+		return model.Choice{}, fmt.Errorf("chat: empty response")
+	}
+
+	choice := resp.Choices[0]
+	switch {
+	case choice.FinishReason() == model.FinishReasonError:
+		errMsg := ""
+		if choice.Delta != nil {
+			errMsg = choice.Delta.Content
+		} else if choice.Message != nil {
+			errMsg = choice.Message.Content
+		}
+		return model.Choice{}, fmt.Errorf("describe: model error: %s", errMsg)
+	case choice.Message == nil:
+		return model.Choice{}, fmt.Errorf("chat: empty message")
+	case choice.Message.Content == "":
+		return model.Choice{}, fmt.Errorf("chat: blank message")
+	case resp.Usage == nil:
+		return model.Choice{}, fmt.Errorf("chat: empty usage")
+	}
+
+	return choice, nil
 }
