@@ -443,6 +443,13 @@ button:disabled {
     justify-content: flex-end;
 }
 
+.setup-version {
+    margin: 12px 0 0;
+    font-size: 11px;
+    color: #8888aa;
+    text-align: center;
+}
+
 .setup-path-row {
     display: flex;
     gap: 6px;

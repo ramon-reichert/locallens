@@ -21,6 +21,11 @@ import (
 //go:embed static
 var staticFiles embed.FS
 
+// version is the build-time version string. It defaults to "dev" for local
+// builds between releases and is overridden by GoReleaser at release time via
+// -ldflags "-X main.version={{.Version}}".
+var version = "dev"
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Printf("\nERROR: %s\n", err)
@@ -31,6 +36,8 @@ func main() {
 func run() error {
 	ctx := context.Background()
 	log := logger.New()
+
+	log(ctx, "locallens starting", "version", version)
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -55,6 +62,7 @@ func run() error {
 	// Wire dependencies into the handler layer.
 	handlers := app.New(app.Config{
 		Log:         log,
+		Version:     version,
 		Service:     svc,
 		SetupStatus: setupStatus,
 		SetupRunner: setupRunner,

@@ -1,0 +1,44 @@
+version: 2
+
+project_name: locallens
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: locallens
+    main: ./cmd/locallens
+    binary: locallens
+
+    env:
+      - CGO_ENABLED=0
+
+    goos:
+      - windows
+      - linux
+      - darwin
+
+    goarch:
+      - amd64
+      - arm64
+
+    # -s -w strips the symbol table/debug info to shrink the binary.
+    # -X main.version stamps the release tag so it shows in logs and the UI.
+    # -H windowsgui suppresses the console window on Windows (production builds).
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - '{{ if eq .Os "windows" }}-H windowsgui{{ end }}'
+
+archives:
+  - formats:
+      - tar.gz
+
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+checksum:
+  name_template: checksums.txt

@@ -1,8 +1,7 @@
 # To-do:
 
-- Remove macos integration workflow;
-- Add tests to new krn.Chat errors;
-- Set a Locallens exclusive kronk libs path?
+- Versioning tag;
+- Licensing?
 - Fine tune image maxside and quality. test in locallens assets (images with small text)
 - Check "per-request allocation" error with vulkan (and maybe other processors) -> T-019dfff7-3572-72cc-bede-689295bad366 -> pinned to kronk v1.24.8, last version before the bug. Possible fix committed in local branch "vulkan_bug" in both kronk AND locallens repos. Llama.cpp pinned to version b9247 for compatibility.
 - Adjust embedding flow to be more accurate. Maybe using grammar (Kronk);

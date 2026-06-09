@@ -37,6 +37,7 @@ const setupProgress = document.getElementById("setup-progress");
 const setupProgressText = document.getElementById("setup-progress-text");
 const setupBrowseBtn = document.getElementById("setup-browse-btn");
 const setupProcessor = document.getElementById("setup-processor");
+const setupVersion = document.getElementById("setup-version");
 const folderPicker = document.getElementById("folder-picker");
 const folderPickerTree = document.getElementById("folder-picker-tree");
 const folderPickerSelect = document.getElementById("folder-picker-select");
@@ -82,6 +83,9 @@ async function checkSetupStatus() {
         const res = await fetch("/api/setup/status");
         const data = await res.json();
         state.setupComplete = data.complete;
+        if (data.version) {
+            setupVersion.textContent = `LocalLens ${data.version}`;
+        }
         setupPath.value = data.basePath || data.defaultPath || "";
         populateProcessorOptions(data.detectedProcessor || "cpu", data.processor || "");
 

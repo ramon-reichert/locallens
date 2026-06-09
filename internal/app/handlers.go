@@ -43,6 +43,7 @@ type SetupRequest struct {
 // Config holds dependencies for creating Handlers.
 type Config struct {
 	Log         logger.Logger
+	Version     string // Build-time version string shown in the UI.
 	Service     *service.Service // nil if setup not yet complete.
 	SetupStatus func() SetupStatusInfo
 	SetupRunner func(ctx context.Context, log logger.Logger, req SetupRequest, progress SetupProgress) (*service.Service, error)
@@ -51,6 +52,7 @@ type Config struct {
 // Handlers holds dependencies for all HTTP handlers.
 type Handlers struct {
 	log         logger.Logger
+	version     string
 	setupStatus func() SetupStatusInfo
 	setupRunner func(ctx context.Context, log logger.Logger, req SetupRequest, progress SetupProgress) (*service.Service, error)
 
@@ -62,6 +64,7 @@ type Handlers struct {
 func New(cfg Config) *Handlers {
 	return &Handlers{
 		log:         cfg.Log,
+		version:     cfg.Version,
 		svc:         cfg.Service,
 		setupStatus: cfg.SetupStatus,
 		setupRunner: cfg.SetupRunner,
@@ -324,10 +327,12 @@ func (h *Handlers) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 	h.mu.RUnlock()
 
 	writeJSON(w, http.StatusOK, struct {
-		Complete bool `json:"complete"`
+		Complete bool   `json:"complete"`
+		Version  string `json:"version"`
 		SetupStatusInfo
 	}{
 		Complete:        ready,
+		Version:         h.version,
 		SetupStatusInfo: info,
 	})
 }
