@@ -42,7 +42,7 @@ func Resize(srcPath string, maxSide int) ([]byte, error) {
 	}
 
 	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: DefaultQuality}); err != nil {
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 100}); err != nil {
 		return nil, fmt.Errorf("encode jpeg: %w", err)
 	}
 

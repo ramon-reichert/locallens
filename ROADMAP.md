@@ -1,6 +1,5 @@
 # To-do:
 
-- Versioning tag;
 - Licensing?
 - Fine tune image maxside and quality. test in locallens assets (images with small text)
 - Check "per-request allocation" error with vulkan (and maybe other processors) -> T-019dfff7-3572-72cc-bede-689295bad366 -> pinned to kronk v1.24.8, last version before the bug. Possible fix committed in local branch "vulkan_bug" in both kronk AND locallens repos. Llama.cpp pinned to version b9247 for compatibility.
@@ -52,8 +51,8 @@
 - Can we have more predictable descriptions using a system prompt? YES, THEY SEEM TO BE MORE CONCISE. Can be re-evaluated after search tests.
 - Can we achieve more detailed descriptions sending separated prompts for each category(people characteristics, actions, etc)? Need to see if message caching works for images in the newer Kronk versions.
 
-- Image maxSize directly impacts inference time. 128px - 17s | 256px - 23s | 384px - 31s
-- 384px provide more precise descriptions (text, context, small details). Can be re-evaluated after search tests.
+- Recent tests show similar inference times for maxSide= 128, 256 and 384px : ~16 seconds/image. 512px increased this time a little ~20sec
+- maxSide=512px provide more precise descriptions (text, context, small details). 384px it is the minimum from now! I also set Quality image enconding to 100%.
 - A test with this prompt - "Did you load an image? Just say yes or no." - shows the time to "load" the image: 62px - 2,2s | 384px - 11,3s - Maybe there is a metric for that.
 - Now that is a metric: ttft - time to first token - but now that is not the bottleneck of inference time anymore. The description appropriate for a good embedding will be the most important thing.
 
@@ -76,6 +75,153 @@
 
 ### Some performance test outputs:
 more recent at top
+
+====================================================================================================
+HARDWARE
+====================================================================================================
+GPU:         none
+System RAM:  3316 MB
+GPU Offload: true
+
+====================================================================================================
+CONFIGS
+====================================================================================================
+Model:       Qwen2-VL-2B-Instruct-Q4_K_M.gguf
+MMProj:      mmproj-Qwen2-VL-2B-Instruct-Q4_K_M.gguf
+MaxSizes:    [384 512]
+MaxTokens:   300
+Temperature: 0.1
+
+Prompt: You extract image keywords for semantic search.
+
+Describe this image in detail. Include: objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.
+
+
+Name       | CtxWin | NBatch | NUBatch |   CacheK |   CacheV |   VRAM(MB) | KVSlot(MB) | RAM Use%
+----------------------------------------------------------------------------------------------------
+app        |   8192 |   2048 |    2048 |     Q8_0 |     Q8_0 |      940.4 |      112.0 |    28.4%
+
+====================================================================================================
+SUMMARY BY CONFIG + MAXSIZE
+====================================================================================================
+app      @384: avgTime  18103ms | ttft   3603ms | avgTimeVar  30% | inTok  197 | outTok 184 | Tok/s 13.5
+app      @512: avgTime  21274ms | ttft   5847ms | avgTimeVar  36% | inTok  285 | outTok 198 | Tok/s 13.6
+====================================================================================================
+
+==================================================================================================================================
+GROUPED RESULTS
+==================================================================================================================================
+Config   |  Max | Image           | AvgTime(ms) |  TTFT(ms) |   GenTime | TimeVar% |  InTok | OutTok | Tok/s |  Succ | Pressure
+----------------------------------------------------------------------------------------------------------------------------------
+app      |  384 | forest.jpg      |       19625 |      3269 |     16356 |      24% |    181 |    210 |  13.6 |  100% |   0 runs
+app      |  384 | graduate.jpg    |       12544 |      3565 |      8978 |      34% |    195 |    110 |  13.6 |  100% |   0 runs
+app      |  384 | parrot.jpg      |       13029 |      3415 |      9614 |      31% |    195 |    120 |  13.8 |  100% |   0 runs
+app      |  384 | search_images.gif |       23438 |      3972 |     19466 |      42% |    209 |    252 |  13.6 |  100% |   0 runs
+app      |  384 | setup_panel-0.jpeg |       24948 |      3815 |     21133 |      10% |    209 |    272 |  13.4 |  100% |   0 runs
+app      |  384 | wedding.jpg     |       15036 |      3580 |     11456 |      38% |    195 |    140 |  13.3 |  100% |   0 runs
+app      |  512 | forest.jpg      |       16294 |      4814 |     11480 |      29% |    249 |    146 |  13.7 |  100% |   0 runs
+app      |  512 | graduate.jpg    |       16822 |      5889 |     10934 |      47% |    285 |    138 |  13.7 |  100% |   0 runs
+app      |  512 | parrot.jpg      |       21518 |      5985 |     15533 |      52% |    285 |    199 |  13.6 |  100% |   0 runs
+app      |  512 | search_images.gif |       29236 |      6280 |     22956 |      28% |    303 |    300 |  13.6 |  100% |   0 runs
+app      |  512 | setup_panel-0.jpeg |       26133 |      6291 |     19842 |      32% |    303 |    255 |  13.4 |  100% |   0 runs
+app      |  512 | wedding.jpg     |       17639 |      5825 |     11814 |      25% |    285 |    150 |  13.7 |  100% |   0 runs
+
+====================================================================================================
+MEMORY PRESSURE SUMMARY
+====================================================================================================
+Total runs:           24
+Runs with pressure:   0 (0.0%)
+  - Slow token:       0
+  - High page faults: 0
+  - Low RAM:          0
+  - Truncated output: 0
+Min available RAM:    1644 MB
+Max page faults:      195101
+====================================================================================================
+
+Grouped results saved to: results\vision\performVis_grp_20260610_202506.csv
+Individual results saved to: results\vision\performVis_ind_20260610_202506.csv
+--- PASS: TestVisionPerformance (544.34s)
+PASS
+ok      github.com/ramon-reichert/locallens/internal/service/tests/performance  544.568s
+
+
+
+====================================================================================================
+HARDWARE
+====================================================================================================
+GPU:         none
+System RAM:  2451 MB
+GPU Offload: true
+
+====================================================================================================
+CONFIGS
+====================================================================================================
+Model:       Qwen2-VL-2B-Instruct-Q4_K_M.gguf
+MMProj:      mmproj-Qwen2-VL-2B-Instruct-Q4_K_M.gguf
+MaxSizes:    [128 256 384]
+MaxTokens:   300
+Temperature: 0.1
+
+Prompt: You extract image keywords for semantic search.
+
+Describe this image in detail. Include: objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.
+
+
+Name       | CtxWin | NBatch | NUBatch |   CacheK |   CacheV |   VRAM(MB) | KVSlot(MB) | RAM Use%
+----------------------------------------------------------------------------------------------------
+app        |   8192 |   2048 |    2048 |     Q8_0 |     Q8_0 |      940.4 |      112.0 |    38.4%
+
+====================================================================================================
+SUMMARY BY CONFIG + MAXSIZE
+====================================================================================================
+app      @128: avgTime  16339ms | ttft    964ms | avgTimeVar  17% | inTok   84 | outTok 200 | Tok/s 14.0
+app      @256: avgTime  15573ms | ttft   1738ms | avgTimeVar  20% | inTok  122 | outTok 181 | Tok/s 13.9
+app      @384: avgTime  16520ms | ttft   3457ms | avgTimeVar  37% | inTok  197 | outTok 169 | Tok/s 13.9
+====================================================================================================
+
+==================================================================================================================================
+GROUPED RESULTS
+==================================================================================================================================
+Config   |  Max | Image           | AvgTime(ms) |  TTFT(ms) |   GenTime | TimeVar% |  InTok | OutTok | Tok/s |  Succ | Pressure
+----------------------------------------------------------------------------------------------------------------------------------
+app      |  128 | forest.jpg      |       20988 |      1017 |     19970 |      10% |     84 |    248 |  13.9 |  100% |   0 runs
+app      |  128 | graduate.jpg    |       12278 |       959 |     11319 |       1% |     84 |    148 |  14.1 |  100% |   0 runs
+app      |  128 | parrot.jpg      |       15482 |       963 |     14519 |      40% |     84 |    192 |  14.0 |  100% |   0 runs
+app      |  128 | search_images.gif |       21782 |       930 |     20852 |      13% |     84 |    279 |  13.9 |  100% |   0 runs
+app      |  128 | setup_panel-0.jpeg |       12141 |       972 |     11169 |       9% |     84 |    142 |  13.8 |  100% |   0 runs
+app      |  128 | wedding.jpg     |       15362 |       945 |     14417 |      30% |     84 |    190 |  14.0 |  100% |   0 runs
+app      |  256 | forest.jpg      |       11066 |      1581 |      9486 |       6% |    114 |    116 |  13.5 |  100% |   0 runs
+app      |  256 | graduate.jpg    |       13434 |      1784 |     11650 |      28% |    123 |    150 |  13.9 |  100% |   0 runs
+app      |  256 | parrot.jpg      |       11841 |      1813 |     10028 |       9% |    123 |    128 |  13.9 |  100% |   0 runs
+app      |  256 | search_images.gif |       20476 |      1743 |     18734 |      33% |    123 |    250 |  14.0 |  100% |   0 runs
+app      |  256 | setup_panel-0.jpeg |       19742 |      1762 |     17980 |      23% |    123 |    239 |  13.9 |  100% |   0 runs
+app      |  256 | wedding.jpg     |       16878 |      1748 |     15130 |      20% |    123 |    200 |  14.0 |  100% |   0 runs
+app      |  384 | forest.jpg      |       13013 |      3058 |      9955 |      26% |    181 |    127 |  13.9 |  100% |   0 runs
+app      |  384 | graduate.jpg    |       11850 |      3427 |      8423 |      44% |    195 |    105 |  13.9 |  100% |   0 runs
+app      |  384 | parrot.jpg      |       13598 |      3403 |     10195 |      21% |    195 |    130 |  13.9 |  100% |   0 runs
+app      |  384 | search_images.gif |       22646 |      3736 |     18910 |      37% |    209 |    249 |  13.8 |  100% |   0 runs
+app      |  384 | setup_panel-0.jpeg |       22524 |      3720 |     18804 |      44% |    209 |    248 |  13.8 |  100% |   0 runs
+app      |  384 | wedding.jpg     |       15487 |      3401 |     12086 |      50% |    195 |    156 |  13.9 |  100% |   0 runs
+
+====================================================================================================
+MEMORY PRESSURE SUMMARY
+====================================================================================================
+Total runs:           36
+Runs with pressure:   0 (0.0%)
+  - Slow token:       0
+  - High page faults: 0
+  - Low RAM:          0
+  - Truncated output: 0
+Min available RAM:    1612 MB
+Max page faults:      187783
+====================================================================================================
+
+Grouped results saved to: results\vision\performVis_grp_20260610_181047.csv
+Individual results saved to: results\vision\performVis_ind_20260610_181047.csv
+--- PASS: TestVisionPerformance (691.97s)
+PASS
+ok      github.com/ramon-reichert/locallens/internal/service/tests/performance  692.194s
 
 
 

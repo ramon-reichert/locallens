@@ -76,7 +76,6 @@ type VisionPrompt struct {
 // ImageConfig holds image preprocessing settings.
 type ImageConfig struct {
 	MaxSide int `json:"maxSide"`
-	Quality int `json:"quality"`
 }
 
 // =========================================================================
@@ -143,8 +142,7 @@ func Defaults() Config {
 			Temperature:  0.1,
 		},
 		Image: ImageConfig{
-			MaxSide: 128,
-			Quality: 90,
+			MaxSide: 512,
 		},
 	}
 }

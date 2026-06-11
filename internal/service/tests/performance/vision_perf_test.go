@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	DefaultRepetitions = 1
+	DefaultRepetitions = 2
 
 	// Pressure detection thresholds
 	ThresholdSlowTPS      = 10.0   // Flag if Kronk's TokensPerSecond < this (at 10 tps, 300 tokens = 30s)
@@ -40,7 +40,7 @@ const (
 	ThresholdMinOutputTok = 20     // Flag if output tokens < this
 )
 
-var defaultMaxSizes = []int{64} //64, 128, 256, 384, 512
+var defaultMaxSizes = []int{384, 512} //64, 128, 256, 384, 512
 
 // defaultConfigs returns test config variants. The first entry always matches
 // the app defaults so one test row represents real production behavior.
@@ -236,26 +236,24 @@ func TestVisionPerformance(t *testing.T) {
 		fmt.Printf("    Model: %s | Type: %s | VRAM: %.1f MB | KV Slots: %.1f MB\n\n",
 			mi.ID, mi.Type, float64(mi.VRAMTotal)/(1024*1024), float64(slotMem)/(1024*1024))
 
-		/*
-			// Warmup: run a tiny inference to trigger lazy initialization (projector
-			// loading, GPU buffer allocation, etc.) so the first real measurement is
-			// not penalized by one-time startup costs.
-			warmupImage, warmupErr := image.Resize(images[0], 64)
-			if warmupErr == nil {
-				fmt.Printf("    Warmup run...")
-				warmupStart := time.Now()
-				warmupData := model.D{
-					"messages": []model.D{
-						{"role": "user", "content": warmupImage},
-						{"role": "user", "content": "hi"},
-					},
-					"temperature": 0.0,
-					"max_tokens":  1,
-				}
-				krn.Chat(ctx, warmupData)
-				fmt.Printf(" done (%dms)\n\n", time.Since(warmupStart).Milliseconds())
+		// Warmup: run a tiny inference to trigger lazy initialization (projector
+		// loading, GPU buffer allocation, etc.) so the first real measurement is
+		// not penalized by one-time startup costs.
+		warmupImage, warmupErr := image.Resize(images[0], 64)
+		if warmupErr == nil {
+			fmt.Printf("    Warmup run...")
+			warmupStart := time.Now()
+			warmupData := model.D{
+				"messages": []model.D{
+					{"role": "user", "content": warmupImage},
+					{"role": "user", "content": "hi"},
+				},
+				"temperature": 0.0,
+				"max_tokens":  1,
 			}
-		*/
+			krn.Chat(ctx, warmupData)
+			fmt.Printf(" done (%dms)\n\n", time.Since(warmupStart).Milliseconds())
+		}
 
 		for _, maxSize := range defaultMaxSizes {
 
