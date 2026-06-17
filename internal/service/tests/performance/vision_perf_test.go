@@ -40,7 +40,7 @@ const (
 	ThresholdMinOutputTok = 20     // Flag if output tokens < this
 )
 
-var defaultMaxSizes = []int{384, 512} //64, 128, 256, 384, 512
+var defaultMaxSizes = []int{512} //64, 128, 256, 384, 512
 
 // defaultConfigs returns test config variants. The first entry always matches
 // the app defaults so one test row represents real production behavior.
@@ -48,7 +48,7 @@ func defaultConfigs() []ConfigVariant {
 	v := testsboot.Cfg.Vision
 	return []ConfigVariant{
 		{"app", v.ContextWindow, v.NBatch, v.NUBatch, model.GGMLType(config.ParseGGMLType(v.CacheTypeK)), model.GGMLType(config.ParseGGMLType(v.CacheTypeV))},
-		//	{"small", 2048, 1024, 512, model.GGMLTypeQ8_0, model.GGMLTypeQ8_0},
+		{"small", 8192, 2048, 1024, model.GGMLTypeQ8_0, model.GGMLTypeQ8_0},
 	}
 }
 

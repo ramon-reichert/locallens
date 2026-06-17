@@ -1,8 +1,8 @@
 # To-do:
 
 - Licensing?
-- Fine tune image maxside and quality. test in locallens assets (images with small text)
 - Check "per-request allocation" error with vulkan (and maybe other processors) -> T-019dfff7-3572-72cc-bede-689295bad366 -> pinned to kronk v1.24.8, last version before the bug. Possible fix committed in local branch "vulkan_bug" in both kronk AND locallens repos. Llama.cpp pinned to version b9247 for compatibility.
+  - Setting NUBatch=2048 (konk manual suggested value) also cause the same vulkan bug even in v1.24.8 and b9247 -> Need to investigate if 2048 is that much better that worth running in cpu. -> A perf-test showed that 1024 got better than 2048, actually, with similar descriptions. Need to test with smaller values and varying other parameters too; It would be nice to atualize kronk first.
 - Adjust embedding flow to be more accurate. Maybe using grammar (Kronk);
 - Make performance tests for the embedding too;
 - Look for suggested model config values at the model provider sites, or test other models > https://chatgpt.com/c/6a04c226-7d9c-83e9-86ae-7f8743cea1ec ;
@@ -39,7 +39,7 @@
 - Goals:      | accurate image description | fast description process | low hardware demand |
               |-----------------------------------------------------------------------------|
     Needs     | outTok > 200               | small maxSize            | small model and cfgs|
-  Constrains  | min viable maxSize         | outToks > 200            | KV cache = Q8_0     |
+  Constrains  | min viable maxSize >384px  | outToks > 200            | KV cache = Q8_0     |
 
 ### Considerations:
 
