@@ -114,7 +114,7 @@ func Defaults() Config {
 	return Config{
 		BasePath:        DefaultBasePath(),
 		Processor:       "cpu",
-		LlamaCppVersion: "b9247",
+		LlamaCppVersion: "b9750",
 		ModelsURLs: Models{
 			VisionModelURL: "https://huggingface.co/ggml-org/Qwen2-VL-2B-Instruct-GGUF/resolve/main/Qwen2-VL-2B-Instruct-Q4_K_M.gguf",
 			VisionProjURL:  "https://huggingface.co/ggml-org/Qwen2-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen2-VL-2B-Instruct-Q8_0.gguf",
@@ -123,7 +123,7 @@ func Defaults() Config {
 		Vision: VisionModelConfig{ // TODO: Check this config at model provider site
 			ContextWindow: 8192,
 			NBatch:        2048,
-			NUBatch:       2048,
+			NUBatch:       1024,
 			CacheTypeK:    "Q8_0", // K cache is highly sensitive to quantization (llama.cpp PR #7412); Q4_0 causes hallucinations on Qwen2-VL due to aggressive GQA (2 KV heads / 14 attn heads)
 			CacheTypeV:    "Q8_0",
 		},

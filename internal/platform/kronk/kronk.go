@@ -206,13 +206,13 @@ func DownloadModels(ctx context.Context, log logger.Logger, cfg config.Config) (
 	}
 
 	log(ctx, "downloading vision model")
-	vision, err := mdls.DownloadURLs(ctx, kronk.FmtLogger, []string{cfg.ModelsURLs.VisionModelURL}, cfg.ModelsURLs.VisionProjURL)
+	vision, err := mdls.DownloadURLs(ctx, kronk.FmtLogger, []string{cfg.ModelsURLs.VisionModelURL}, cfg.ModelsURLs.VisionProjURL, "")
 	if err != nil {
 		return ModelPaths{}, fmt.Errorf("vision download: %w", err)
 	}
 
 	log(ctx, "downloading embedding model")
-	embed, err := mdls.DownloadURLs(ctx, kronk.FmtLogger, []string{cfg.ModelsURLs.EmbedModelURL}, "")
+	embed, err := mdls.DownloadURLs(ctx, kronk.FmtLogger, []string{cfg.ModelsURLs.EmbedModelURL}, "", "")
 	if err != nil {
 		return ModelPaths{}, fmt.Errorf("embed download: %w", err)
 	}

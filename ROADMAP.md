@@ -1,8 +1,13 @@
 # To-do:
 
 - Licensing?
-- Fine tune image maxside and quality. test in locallens assets (images with small text)
-- Check "per-request allocation" error with vulkan (and maybe other processors) -> T-019dfff7-3572-72cc-bede-689295bad366 -> pinned to kronk v1.24.8, last version before the bug. Possible fix committed in local branch "vulkan_bug" in both kronk AND locallens repos. Llama.cpp pinned to version b9247 for compatibility.
+- Comeback to upstream Kronk when "preloadLibraries" fix get merged;
+- Reached good descriptions of detailed images with Image maxside=512 and quality=100%. But still getting looped words description for screenshot.gif -> Try released prompt;
+- Check "per-request allocation" error with vulkan (and maybe other processors) -> T-019dfff7-3572-72cc-bede-689295bad366
+  - last kronk version before the bug is v1.24.8, with Llama.cpp pinned to version b9247 for compatibility.
+  - Possible fix committed in local branch "vulkan_bug" in both kronk AND locallens repos.
+  - Until the bug is fixed, will move on with processor=CPU only.
+  - Now running with kronk v1.28.3 and llama.cpp v9750, LocalLens managed to describe 5 images before breaking with the vulkan error;
 - Adjust embedding flow to be more accurate. Maybe using grammar (Kronk);
 - Make performance tests for the embedding too;
 - Look for suggested model config values at the model provider sites, or test other models > https://chatgpt.com/c/6a04c226-7d9c-83e9-86ae-7f8743cea1ec ;
