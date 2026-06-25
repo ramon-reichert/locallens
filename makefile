@@ -13,16 +13,16 @@ setup:
 
 # Run fast unit tests (no model loading).
 test-unit:
-	CGO_ENABLED=0 go test -timeout 15s -v -count=1 ./internal/service/tests/unittests/...
+	CGO_ENABLED=0 go test -timeout 15s -v -count=1 ./internal/...
 
 # Run service-level integration tests (loads models, indexes and searches images).
 test-service:
-	CGO_ENABLED=0 go test -timeout 30m -v -count=1 ./internal/service/tests
+	CGO_ENABLED=0 go test -tags "integration" -timeout 30m -v -count=1 ./internal/service/tests
 
 # Run vision model performance benchmarks across config and image size variants.
 test-performance-vision:
-	CGO_ENABLED=0 go test -timeout 60m -v -run TestVisionPerformance ./internal/service/tests/performance/...
+	CGO_ENABLED=0 go test -tags "integration" -timeout 60m -v -run TestVisionPerformance ./internal/service/tests/performance/...
 
 # Run embedding similarity tests to evaluate search quality.
 test-performance-similarity:
-	CGO_ENABLED=0 go test -v -run TestSimilarity ./internal/service/tests/performance/...
+	CGO_ENABLED=0 go test -tags "integration" -v -run TestSimilarity ./internal/service/tests/performance/...

@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/ramon-reichert/locallens/internal/app"
+	"github.com/ramon-reichert/locallens/cmd/locallens/app"
 	"github.com/ramon-reichert/locallens/internal/platform/config"
 	"github.com/ramon-reichert/locallens/internal/platform/kronk"
 	"github.com/ramon-reichert/locallens/internal/platform/logger"

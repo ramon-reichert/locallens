@@ -1,4 +1,4 @@
-package unittests
+package search_test
 
 import (
 	"testing"

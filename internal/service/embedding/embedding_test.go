@@ -1,4 +1,4 @@
-package unittests
+package embedding_test
 
 import (
 	"context"

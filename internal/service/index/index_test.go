@@ -1,4 +1,4 @@
-package unittests
+package index_test
 
 import (
 	"path/filepath"

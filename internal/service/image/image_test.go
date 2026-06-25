@@ -1,4 +1,4 @@
-package unittests
+package image_test
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 	"github.com/ramon-reichert/locallens/internal/service/image"
 )
 
-const testdataDir = "../testdata"
+const testdataDir = "../tests/testdata"
 
 var maxSideDefault = config.Defaults().Image.MaxSide
 
