@@ -47,4 +47,4 @@ jobs:
         env:
           CGO_ENABLED: 0
           KRONK_PROCESSOR: cpu
-        run: go test -timeout 30m -v -count=1 ./internal/service/tests
+        run: go test -tags "integration" -timeout 30m -v -count=1 ./internal/service/tests
