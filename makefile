@@ -1,3 +1,6 @@
+run:
+	CGO_ENABLED=0 go run ./cmd/locallens/main.go
+
 # Build the app without a console window (production mode).
 build:
 	CGO_ENABLED=0 go build -ldflags "-H windowsgui" -o locallens.exe ./cmd/locallens/

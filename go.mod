@@ -2,9 +2,7 @@ module github.com/ramon-reichert/locallens
 
 go 1.26.0
 
-require github.com/ardanlabs/kronk v1.28.3
-
-replace github.com/ardanlabs/kronk => github.com/ramon-reichert/kronk v0.0.0-20260624180431-a07708a29100
+require github.com/ardanlabs/kronk v1.28.6
 
 require github.com/ardanlabs/jinja v1.4.0 // indirect
 

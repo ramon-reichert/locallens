@@ -21,10 +21,11 @@ With these pieces, LocalLens can index a folder of images, describe each image l
 
 ## How to Use LocalLens
 
+0) For devs only: Clone the repository and use the Makefile targets to run, build, and test the project. Go to step 3.
+
 1) Download the executable from the GitHub Releases section.
 
 2) Run the executable. The browser UI opens automatically.
-    - Devs: you can view the backend logs building the app again with `make build-logs`.
 
 3) At first launch, the setup panel opens automatically. There you can choose:
     - where the AI models will be downloaded
@@ -47,7 +48,4 @@ With these pieces, LocalLens can index a folder of images, describe each image l
 
 ![searching_images](https://github.com/ramon-reichert/locallens/blob/e5a84456d2209fbd89411aed09c54fd13ffe89dd/assets/search_images.gif)
 
-### Developers
-
-Clone the repository and use the Makefile targets to run, build, and test the project.
 
