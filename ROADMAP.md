@@ -15,7 +15,6 @@
 - See if the LocalLens can get any benefit from FlashAttention;
 
 - Search for "TODO" along the codebase;
-- Vendor when reach stable version?;
 
 - Review and correct indexing/searching recursiveness code; Add recursiveness test too;
 
