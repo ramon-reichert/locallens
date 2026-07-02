@@ -36,15 +36,15 @@ jobs:
       - name: Build
         env:
           CGO_ENABLED: 0
-        run: go build ./cmd/locallens
+        run: go build -mod=vendor ./cmd/locallens
 
       - name: Verify Windows release build
         if: runner.os == 'Windows'
         env:
           CGO_ENABLED: 0
-        run: go build -ldflags "-H windowsgui" -o locallens.exe ./cmd/locallens
+        run: go build -mod=vendor -ldflags "-H windowsgui" -o locallens.exe ./cmd/locallens
 
       - name: Run unit tests
         env:
           CGO_ENABLED: 0
-        run: go test -timeout 15s -v -count=1 ./internal/...
+        run: go test -mod=vendor -timeout 15s -v -count=1 ./internal/...
