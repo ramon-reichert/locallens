@@ -6,6 +6,11 @@
 *.dylib
 dist/
 
+# Re-include vendored shared libraries (needed for go:embed)
+!vendor/**/*.dll
+!vendor/**/*.dylib
+!vendor/**/*.so
+
 # Test binary and output
 *.test
 *.csv
