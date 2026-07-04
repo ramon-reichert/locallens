@@ -58,10 +58,11 @@ func TestMain(m *testing.M) {
 
 	var svcErr error
 	svc, svcErr = service.New(ctx, service.Config{
-		Log:         testsboot.Log,
-		VisionPaths: testsboot.VisionPaths,
-		EmbedPaths:  testsboot.EmbedPaths,
-		AppCfg:      testsboot.Cfg,
+		Log:             testsboot.Log,
+		VisionPaths:     testsboot.VisionPaths,
+		CategorizePaths: testsboot.CategorizePaths,
+		EmbedPaths:      testsboot.EmbedPaths,
+		AppCfg:          testsboot.Cfg,
 	})
 	if svcErr != nil {
 		fmt.Printf("create service: %v\n", svcErr)
@@ -109,26 +110,25 @@ func TestIndexFolder(t *testing.T) {
 		t.Error("expected .locallens.index file inside the folder")
 	}
 
-	// Progress callback assertions — every image must fire exactly one
-	// "describing" event followed by one "indexed" event, in order, so the
-	// UI can show "Describing image X" before each describe call and then
-	// flip to "indexed" after the save.
+	// Progress callback assertions — every image must fire, in order, one
+	// "describing" event, then one "categorized" event (carrying the four
+	// facets), then one "indexed" event. This lets the UI show "Describing
+	// image X", then the extracted facets, then flip to "indexed" after save.
 	//
 	// Done semantics:
-	//   - describing: count of images already fully indexed (this one not yet
-	//     done), so the first describing has Done == 0.
+	//   - describing/categorized: count of images already fully indexed (this
+	//     one not yet done), so the first pair has Done == 0.
 	//   - indexed: count including this image, so the Nth indexed has Done == N.
-	wantEvents := 2 * count
+	const stagesPerImage = 3
+	wantEvents := stagesPerImage * count
 	if got := len(indexProgressEvents); got != wantEvents {
-		t.Fatalf("expected %d progress events (2 per image), got %d", wantEvents, got)
+		t.Fatalf("expected %d progress events (3 per image), got %d", wantEvents, got)
 	}
 
+	stageCycle := []string{"describing", "categorized", "indexed"}
 	doneSoFar := 0
 	for i, p := range indexProgressEvents {
-		wantStage := "describing"
-		if i%2 == 1 {
-			wantStage = "indexed"
-		}
+		wantStage := stageCycle[i%stagesPerImage]
 		if p.Stage != wantStage {
 			t.Errorf("event %d: stage = %q, want %q", i, p.Stage, wantStage)
 		}
@@ -149,6 +149,14 @@ func TestIndexFolder(t *testing.T) {
 			}
 			if p.ETA != 0 {
 				t.Errorf("event %d (describing): expected ETA == 0, got %v", i, p.ETA)
+			}
+		case "categorized":
+			if p.Facets == nil {
+				t.Errorf("event %d (categorized): expected non-nil Facets", i)
+				break
+			}
+			if p.Facets.IsEmpty() {
+				t.Errorf("event %d (categorized): facets are empty for %s", i, filepath.Base(p.Current))
 			}
 		case "indexed":
 			if p.Done != doneSoFar+1 {

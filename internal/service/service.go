@@ -12,6 +12,7 @@ import (
 
 	"github.com/ramon-reichert/locallens/internal/platform/config"
 	"github.com/ramon-reichert/locallens/internal/platform/logger"
+	"github.com/ramon-reichert/locallens/internal/service/categorization"
 	"github.com/ramon-reichert/locallens/internal/service/description"
 	"github.com/ramon-reichert/locallens/internal/service/embedding"
 	"github.com/ramon-reichert/locallens/internal/service/index"
@@ -20,15 +21,17 @@ import (
 
 const (
 	indexFileName        = ".locallens.index"
-	describeImageTimeout = 10 * time.Minute
+	describeImageTimeout = 2 * time.Minute
+	categorizeTimeout    = 2 * time.Minute
 	embedTimeout         = 1 * time.Minute
 )
 
 // Service orchestrates indexing and search operations.
 type Service struct {
-	log       logger.Logger
-	describer *description.Describer
-	embedder  *embedding.Embedder
+	log         logger.Logger
+	describer   *description.Describer
+	categorizer *categorization.Categorizer
+	embedder    *embedding.Embedder
 
 	// indexes caches per-folder indexes loaded from disk so repeat searches
 	// avoid reading and deserializing .locallens.index files. Keyed by the
@@ -39,10 +42,11 @@ type Service struct {
 
 // Config holds configuration for creating a Service.
 type Config struct {
-	Log         logger.Logger
-	VisionPaths config.ModelFilePaths
-	EmbedPaths  config.ModelFilePaths
-	AppCfg      config.Config
+	Log             logger.Logger
+	VisionPaths     config.ModelFilePaths
+	CategorizePaths config.ModelFilePaths
+	EmbedPaths      config.ModelFilePaths
+	AppCfg          config.Config
 }
 
 // New creates a Service with the given configuration and loads the embedding
@@ -58,6 +62,12 @@ func New(ctx context.Context, cfg Config) (*Service, error) {
 			Vision:  cfg.AppCfg.Vision,
 			Prompt:  cfg.AppCfg.Prompt,
 			MaxSide: cfg.AppCfg.Image.MaxSide,
+		}),
+		categorizer: categorization.New(categorization.Config{
+			Log:    cfg.Log,
+			Paths:  cfg.CategorizePaths,
+			Engine: cfg.AppCfg.Categorize,
+			Prompt: cfg.AppCfg.CategorizePrompt,
 		}),
 		embedder: embedding.New(embedding.Config{
 			Log:   cfg.Log,
@@ -79,26 +89,30 @@ func New(ctx context.Context, cfg Config) (*Service, error) {
 //   - "describing": the image is about to be sent to the vision model. ETA is
 //     not set (we don't yet know how long it will take). Done is the count of
 //     images already fully indexed (i.e., it does not include this one).
-//   - "indexed": the image was fully described, embedded, and saved. Done
-//     includes this image, and ETA is the estimated remaining time based on
-//     a running average of per-image elapsed time.
+//   - "categorized": the description was reshaped into search facets. Facets
+//     carries the result so callers can display it. ETA is not set.
+//   - "indexed": the image was fully described, categorized, embedded, and
+//     saved. Done includes this image, and ETA is the estimated remaining time
+//     based on a running average of per-image elapsed time.
 //
 // Already-indexed images that were skipped on resume don't trigger callbacks
 // and don't contribute to either Done or Total.
 type IndexProgressInfo struct {
-	Stage     string        // "describing" or "indexed"
-	Folder    string        // current folder being processed
-	Current   string        // path of the image being processed
-	Done      int           // newly indexed images so far
-	Failed    int           // images that failed during this indexing run
-	Processed int           // images completed or failed during this indexing run
-	Total     int           // total new images to index across all folders in this call
-	ETA       time.Duration // estimated remaining time (only set when Stage == "indexed")
-	Error     string        // failure reason when Stage == "failed"
+	Stage     string                 // "describing", "categorized", "indexed", or "failed"
+	Folder    string                 // current folder being processed
+	Current   string                 // path of the image being processed
+	Done      int                    // newly indexed images so far
+	Failed    int                    // images that failed during this indexing run
+	Processed int                    // images completed or failed during this indexing run
+	Total     int                    // total new images to index across all folders in this call
+	ETA       time.Duration          // estimated remaining time (only set when Stage == "indexed")
+	Facets    *categorization.Facets // set only when Stage == "categorized"
+	Error     string                 // failure reason when Stage == "failed"
 }
 
 // IndexProgress is invoked at multiple points per image: once when the image
-// is about to be described (Stage="describing") and once after it has been
+// is about to be described (Stage="describing"), once after it has been
+// categorized into facets (Stage="categorized"), and once after it has been
 // fully indexed and saved (Stage="indexed"). Pass nil to disable reporting.
 type IndexProgress func(IndexProgressInfo)
 
@@ -143,6 +157,15 @@ func (s *Service) IndexFolder(ctx context.Context, folderPath string, progress I
 		}
 	}()
 
+	if err := s.categorizer.Load(ctx); err != nil {
+		return IndexResult{}, fmt.Errorf("load categorizer: %w", err)
+	}
+	defer func() {
+		if err := s.categorizer.Unload(ctx); err != nil {
+			s.log(ctx, "unload categorizer error", "error", err)
+		}
+	}()
+
 	tracker := &indexProgressTracker{callback: progress, total: total, folder: folderPath}
 	return s.indexFolder(ctx, folderPath, tracker)
 }
@@ -174,7 +197,7 @@ func (s *Service) indexFolder(ctx context.Context, folderPath string, tracker *i
 		return IndexResult{}, fmt.Errorf("load index %q: %w", folderPath, err)
 	}
 
-	// Per-image describe → embed → add → save. Saving after each image makes
+	// Per-image describe → categorize → embed → add → save. Saving after each image makes
 	// progress durable: a crash after image N leaves images 1..N persisted,
 	// and the existing-entry skip below resumes from N+1 on restart.
 	var sumTTFT, sumTPS, sumEmbedMS float64
@@ -208,10 +231,24 @@ func (s *Service) indexFolder(ctx context.Context, folderPath string, tracker *i
 			continue
 		}
 
+		s.log(ctx, "categorize image", "path", imgPath)
+
+		catCtx, catCancel := context.WithTimeout(ctx, categorizeTimeout)
+		catResult, err := s.categorizer.Categorize(catCtx, descResult.Description)
+		catCancel()
+		if err != nil {
+			s.log(ctx, "categorize error", "path", imgPath, "error", err)
+			failed++
+			tracker.recordFailed(imgPath, time.Since(imgStart), err)
+			continue
+		}
+
+		tracker.categorized(imgPath, catResult.Facets)
+
 		s.log(ctx, "embed image", "path", imgPath)
 
 		embedCtx, embedCancel := context.WithTimeout(ctx, embedTimeout)
-		embedResult, err := s.embedder.Embed(embedCtx, descResult.Description)
+		embedResult, err := s.embedder.Embed(embedCtx, catResult.EmbedText)
 		embedCancel()
 		if err != nil {
 			s.log(ctx, "embed error", "path", imgPath, "error", err)
@@ -313,6 +350,23 @@ func (t *indexProgressTracker) describing(imgPath string) {
 		Failed:    t.failed,
 		Processed: t.done + t.failed,
 		Total:     t.total,
+	})
+}
+
+func (t *indexProgressTracker) categorized(imgPath string, facets categorization.Facets) {
+	if t == nil || t.callback == nil {
+		return
+	}
+	f := facets
+	t.callback(IndexProgressInfo{
+		Stage:     "categorized",
+		Folder:    t.folder,
+		Current:   imgPath,
+		Done:      t.done,
+		Failed:    t.failed,
+		Processed: t.done + t.failed,
+		Total:     t.total,
+		Facets:    &f,
 	})
 }
 
@@ -431,6 +485,9 @@ func (s *Service) IndexedPaths(folderPath string) map[string]bool {
 // Close releases all resources.
 func (s *Service) Close(ctx context.Context) error {
 	if err := s.describer.Unload(ctx); err != nil {
+		return err
+	}
+	if err := s.categorizer.Unload(ctx); err != nil {
 		return err
 	}
 	return s.embedder.Unload(ctx)

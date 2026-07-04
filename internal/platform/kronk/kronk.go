@@ -19,8 +19,9 @@ import (
 
 // ModelPaths holds the resolved file paths for all models.
 type ModelPaths struct {
-	Vision config.ModelFilePaths
-	Embed  config.ModelFilePaths
+	Vision     config.ModelFilePaths
+	Embed      config.ModelFilePaths
+	Categorize config.ModelFilePaths
 }
 
 // SystemInfo describes the llama.cpp library build resident in this process.
@@ -190,7 +191,16 @@ func ResolvePaths(cfg config.Config) (ModelPaths, error) {
 		return ModelPaths{}, fmt.Errorf("resolve embed model: %w", err)
 	}
 
-	return ModelPaths{Vision: toModelFilePaths(vision), Embed: toModelFilePaths(embed)}, nil
+	categorize, err := mdls.FullPath(cfg.ModelsURLs.CategorizeModelID())
+	if err != nil {
+		return ModelPaths{}, fmt.Errorf("resolve categorize model: %w", err)
+	}
+
+	return ModelPaths{
+		Vision:     toModelFilePaths(vision),
+		Embed:      toModelFilePaths(embed),
+		Categorize: toModelFilePaths(categorize),
+	}, nil
 }
 
 // DownloadModels downloads vision and embedding models.
@@ -217,7 +227,17 @@ func DownloadModels(ctx context.Context, log logger.Logger, cfg config.Config) (
 		return ModelPaths{}, fmt.Errorf("embed download: %w", err)
 	}
 
-	return ModelPaths{Vision: toModelFilePaths(vision), Embed: toModelFilePaths(embed)}, nil
+	log(ctx, "downloading categorization model")
+	categorize, err := mdls.DownloadURLs(ctx, kronk.FmtLogger, []string{cfg.ModelsURLs.CategorizeModelURL}, "", "")
+	if err != nil {
+		return ModelPaths{}, fmt.Errorf("categorize download: %w", err)
+	}
+
+	return ModelPaths{
+		Vision:     toModelFilePaths(vision),
+		Embed:      toModelFilePaths(embed),
+		Categorize: toModelFilePaths(categorize),
+	}, nil
 }
 
 func toModelFilePaths(p models.Path) config.ModelFilePaths {

@@ -13,11 +13,12 @@ import (
 )
 
 var (
-	once        sync.Once
-	VisionPaths config.ModelFilePaths
-	EmbedPaths  config.ModelFilePaths
-	Log         logger.Logger
-	Cfg         config.Config
+	once            sync.Once
+	VisionPaths     config.ModelFilePaths
+	CategorizePaths config.ModelFilePaths
+	EmbedPaths      config.ModelFilePaths
+	Log             logger.Logger
+	Cfg             config.Config
 )
 
 // Boot initializes Kronk and resolves model paths for tests.
@@ -59,6 +60,7 @@ func Boot() {
 		}
 
 		VisionPaths = paths.Vision
+		CategorizePaths = paths.Categorize
 		EmbedPaths = paths.Embed
 	})
 }

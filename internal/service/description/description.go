@@ -158,6 +158,24 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (DescribeRes
 		data["dry_allowed_length"] = p.DryAllowedLength
 	}
 
+	// Repetition penalty: blunt per-token fallback for single-token spam that
+	// DRY's n-gram matching can miss. 1.0 means off, so only send when > 1.0.
+	if p.RepeatPenalty > 1.0 {
+		data["repeat_penalty"] = p.RepeatPenalty
+		if p.RepeatLastN > 0 {
+			data["repeat_last_n"] = p.RepeatLastN
+		}
+	}
+
+	// Frequency/presence penalties: discourage tokens that keep recurring.
+	// Both default to 0 (disabled), so only send when set.
+	if p.FrequencyPenalty != 0 {
+		data["frequency_penalty"] = p.FrequencyPenalty
+	}
+	if p.PresencePenalty != 0 {
+		data["presence_penalty"] = p.PresencePenalty
+	}
+
 	start := time.Now()
 
 	resp, err := krn.Chat(ctx, data)

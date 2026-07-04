@@ -209,9 +209,10 @@ func initService(ctx context.Context, log logger.Logger, cfg config.Config) (*se
 	}
 
 	return service.New(ctx, service.Config{
-		Log:         log,
-		VisionPaths: paths.Vision,
-		EmbedPaths:  paths.Embed,
-		AppCfg:      cfg,
+		Log:             log,
+		VisionPaths:     paths.Vision,
+		CategorizePaths: paths.Categorize,
+		EmbedPaths:      paths.Embed,
+		AppCfg:          cfg,
 	})
 }
