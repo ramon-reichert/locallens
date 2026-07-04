@@ -4,7 +4,6 @@
 - Adjust embedding flow to be more accurate. Maybe using grammar (Kronk);
 - Make performance tests for the embedding too;
 
-- Reached good descriptions of detailed images with Image maxside=512 and quality=100%. But still getting looped words description for screenshot.gif -> Try released prompt;
 - Check "per-request allocation" error with vulkan (and maybe other processors) -> T-019dfff7-3572-72cc-bede-689295bad366
   - last kronk version before the bug is v1.24.8, with Llama.cpp pinned to version b9247 for compatibility.
   - Possible fix committed in local branch "vulkan_bug" in both kronk AND locallens repos.
@@ -12,7 +11,6 @@
   - Now running with kronk v1.28.3 and llama.cpp v9750, LocalLens managed to describe 5 images before breaking with the vulkan error;
 
 - Look for suggested model config values at the model provider sites, or test other models > https://chatgpt.com/c/6a04c226-7d9c-83e9-86ae-7f8743cea1ec ;
-- See if the LocalLens can get any benefit from FlashAttention;
 
 - Search for "TODO" along the codebase;
 
@@ -64,7 +62,7 @@
 - Big image maxSize(>384px) and restrictive/demanding prompts can cause model to fail responses when running with limited hardware, as mine. These two factors showed up to play a higher role in performance than model configs(considering viable values, at least) as cxtWindow, Nbatch and NUbatch.
 - Thanks to changes made to allow track yzma mtmd.HelperEvalChunks return codes, it is possible to see that big image maxSize(768, sometimes even 512) can cause a prefill error, KV_cache_full, totally corrupting the response;
 - The restrictive/demanding prompts don't cause KV_cache_full error, but increase a lot the time/tokens and cause truncated(few tokens) response.
-- The hallucinated responses (randomly repeated words forever) could not be precisely associated with some test case yet. More often when KVcache Q4_0 than Q8_0;
+- The hallucinated responses (randomly repeated words forever) could not be precisely associated with some test case yet. More often when KVcache Q4_0 than Q8_0; >> Solved using dry(dont repeat yourself)_multiplier=2.5, a per-request sampling parameter
 - The model size itself and its quantization value, as the projection file attached, impacts the hardware demand. Currently using small ones, with good behavior of descriptions achieved. Can try even smaller configs later.
 - I assumed KV cache precision should track model weight precision — it doesn't. They're independent. The K cache holds attention keys that get multiplied against every query head in the group; with Qwen2-VL's 7:1 GQA ratio, Q4_0 quantization noise in the K cache gets amplified across all 7 sharing heads, destroying attention patterns. Q8_0 is the minimum safe level for K cache, especially on small Qwen models. V cache is more tolerant (could even go Q4_0), but Q8_0/Q8_0 is the pragmatic safe default.
 

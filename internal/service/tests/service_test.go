@@ -97,7 +97,7 @@ func TestIndexFolder(t *testing.T) {
 	}
 
 	testImages := []string{
-		"forest.jpg", "graduate.jpg", "parrot.jpg", "wedding.jpg", "screenshot.gif", "setup.jpeg",
+		"forest.jpg", "graduate.jpg", "parrot.jpg", "wedding.jpg", "app.gif", "setup.jpeg",
 	}
 	if count != len(testImages) {
 		t.Errorf("expected %d indexed images, got %d", len(testImages), count)

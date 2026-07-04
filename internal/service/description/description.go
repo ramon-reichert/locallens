@@ -149,6 +149,15 @@ func (d *Describer) Describe(ctx context.Context, imagePath string) (DescribeRes
 		"max_tokens":  p.MaxTokens,
 	}
 
+	// DRY sampler: penalize repeated n-gram sequences to stop the vision
+	// model from looping on text-heavy images. Only sent when enabled so the
+	// SDK keeps its own defaults otherwise.
+	if p.DryMultiplier > 0 {
+		data["dry_multiplier"] = p.DryMultiplier
+		data["dry_base"] = p.DryBase
+		data["dry_allowed_length"] = p.DryAllowedLength
+	}
+
 	start := time.Now()
 
 	resp, err := krn.Chat(ctx, data)

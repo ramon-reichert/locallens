@@ -71,6 +71,14 @@ type VisionPrompt struct {
 	UserPrompt   string  `json:"userPrompt"`
 	MaxTokens    int     `json:"maxTokens"`
 	Temperature  float64 `json:"temperature"`
+
+	// DRY (Don't Repeat Yourself) sampler. Penalizes repeated n-gram
+	// sequences (multi-word patterns), which prevents the model from getting
+	// stuck in structural loops on text-heavy images while still allowing
+	// legitimate repeated words. DryMultiplier == 0 disables the sampler.
+	DryMultiplier    float64 `json:"dryMultiplier"`
+	DryBase          float64 `json:"dryBase"`
+	DryAllowedLength int     `json:"dryAllowedLength"`
 }
 
 // ImageConfig holds image preprocessing settings.
@@ -140,6 +148,17 @@ func Defaults() Config {
 			UserPrompt:   "Describe this image in detail. Include: objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.",
 			MaxTokens:    300,
 			Temperature:  0.1,
+			// DRY sampler defaults. Targets structural n-gram loops seen on
+			// text-heavy images (repeated phrase cycles) without penalizing
+			// legitimately reused words the way repeat_penalty would. DRY only
+			// penalizes actual repeated n-grams (length > DryAllowedLength), so
+			// an aggressive multiplier is safe for normal, non-looping images.
+			// 1.05 (the SDK floor) had no measurable effect on pathological
+			// text-heavy screenshots; 3.0 (top of the "aggressive" band) is
+			// needed to break the model's high-confidence repeat priors.
+			DryMultiplier:    2.5,
+			DryBase:          1.75,
+			DryAllowedLength: 2,
 		},
 		Image: ImageConfig{
 			MaxSide: 512,
