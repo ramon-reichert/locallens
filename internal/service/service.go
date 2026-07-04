@@ -89,8 +89,6 @@ func New(ctx context.Context, cfg Config) (*Service, error) {
 //   - "describing": the image is about to be sent to the vision model. ETA is
 //     not set (we don't yet know how long it will take). Done is the count of
 //     images already fully indexed (i.e., it does not include this one).
-//   - "categorized": the description was reshaped into search facets. Facets
-//     carries the result so callers can display it. ETA is not set.
 //   - "indexed": the image was fully described, categorized, embedded, and
 //     saved. Done includes this image, and ETA is the estimated remaining time
 //     based on a running average of per-image elapsed time.
@@ -98,21 +96,19 @@ func New(ctx context.Context, cfg Config) (*Service, error) {
 // Already-indexed images that were skipped on resume don't trigger callbacks
 // and don't contribute to either Done or Total.
 type IndexProgressInfo struct {
-	Stage     string                 // "describing", "categorized", "indexed", or "failed"
-	Folder    string                 // current folder being processed
-	Current   string                 // path of the image being processed
-	Done      int                    // newly indexed images so far
-	Failed    int                    // images that failed during this indexing run
-	Processed int                    // images completed or failed during this indexing run
-	Total     int                    // total new images to index across all folders in this call
-	ETA       time.Duration          // estimated remaining time (only set when Stage == "indexed")
-	Facets    *categorization.Facets // set only when Stage == "categorized"
-	Error     string                 // failure reason when Stage == "failed"
+	Stage     string        // "describing", "indexed", or "failed"
+	Folder    string        // current folder being processed
+	Current   string        // path of the image being processed
+	Done      int           // newly indexed images so far
+	Failed    int           // images that failed during this indexing run
+	Processed int           // images completed or failed during this indexing run
+	Total     int           // total new images to index across all folders in this call
+	ETA       time.Duration // estimated remaining time (only set when Stage == "indexed")
+	Error     string        // failure reason when Stage == "failed"
 }
 
 // IndexProgress is invoked at multiple points per image: once when the image
-// is about to be described (Stage="describing"), once after it has been
-// categorized into facets (Stage="categorized"), and once after it has been
+// is about to be described (Stage="describing") and once after it has been
 // fully indexed and saved (Stage="indexed"). Pass nil to disable reporting.
 type IndexProgress func(IndexProgressInfo)
 
@@ -243,13 +239,9 @@ func (s *Service) indexFolder(ctx context.Context, folderPath string, tracker *i
 			continue
 		}
 
-		tracker.categorized(imgPath, catResult.Facets)
-
 		s.log(ctx, "embed image", "path", imgPath)
 
-		embedCtx, embedCancel := context.WithTimeout(ctx, embedTimeout)
-		embedResult, err := s.embedder.Embed(embedCtx, catResult.EmbedText)
-		embedCancel()
+		embeddings, embedMS, err := s.embedFacets(ctx, catResult.Facets.FacetTexts())
 		if err != nil {
 			s.log(ctx, "embed error", "path", imgPath, "error", err)
 			failed++
@@ -262,7 +254,7 @@ func (s *Service) indexFolder(ctx context.Context, folderPath string, tracker *i
 		idx.Add(index.Entry{
 			Path:        imgPath,
 			Description: descResult.Description,
-			Embedding:   embedResult.Embedding,
+			Embeddings:  embeddings,
 		})
 
 		if err := idx.Save(); err != nil {
@@ -271,7 +263,7 @@ func (s *Service) indexFolder(ctx context.Context, folderPath string, tracker *i
 
 		sumTTFT += descResult.TimeToFirstTokenMS
 		sumTPS += descResult.TokensPerSecond
-		sumEmbedMS += float64(embedResult.Elapsed.Milliseconds())
+		sumEmbedMS += float64(embedMS)
 		described++
 
 		tracker.indexed(imgPath, time.Since(imgStart))
@@ -353,23 +345,6 @@ func (t *indexProgressTracker) describing(imgPath string) {
 	})
 }
 
-func (t *indexProgressTracker) categorized(imgPath string, facets categorization.Facets) {
-	if t == nil || t.callback == nil {
-		return
-	}
-	f := facets
-	t.callback(IndexProgressInfo{
-		Stage:     "categorized",
-		Folder:    t.folder,
-		Current:   imgPath,
-		Done:      t.done,
-		Failed:    t.failed,
-		Processed: t.done + t.failed,
-		Total:     t.total,
-		Facets:    &f,
-	})
-}
-
 func (t *indexProgressTracker) indexed(imgPath string, imgElapsed time.Duration) {
 	if t == nil {
 		return
@@ -424,6 +399,34 @@ func (t *indexProgressTracker) recordFailed(imgPath string, imgElapsed time.Dura
 	})
 }
 
+// embedFacets embeds each facet text into its own vector, returning one
+// index.FacetEmbedding per facet plus the total embed time in milliseconds.
+// It fails if any facet fails to embed or if there are no facets to embed.
+func (s *Service) embedFacets(ctx context.Context, facetTexts []categorization.FacetText) ([]index.FacetEmbedding, int64, error) {
+	if len(facetTexts) == 0 {
+		return nil, 0, fmt.Errorf("no facets to embed")
+	}
+
+	embeddings := make([]index.FacetEmbedding, 0, len(facetTexts))
+	var totalMS int64
+
+	for _, ft := range facetTexts {
+		embedCtx, embedCancel := context.WithTimeout(ctx, embedTimeout)
+		embedResult, err := s.embedder.Embed(embedCtx, ft.Text)
+		embedCancel()
+		if err != nil {
+			return nil, 0, fmt.Errorf("embed facet %q: %w", ft.Name, err)
+		}
+		embeddings = append(embeddings, index.FacetEmbedding{
+			Facet:  ft.Name,
+			Vector: embedResult.Embedding,
+		})
+		totalMS += embedResult.Elapsed.Milliseconds()
+	}
+
+	return embeddings, totalMS, nil
+}
+
 // Search finds images similar to the query text in the given folder.
 // The folder must have been indexed first.
 func (s *Service) Search(ctx context.Context, folderPath string, query string, k int) ([]search.Result, error) {
@@ -451,10 +454,17 @@ func (s *Service) Search(ctx context.Context, folderPath string, query string, k
 
 	searchEntries := make([]search.Entry, 0, len(entries))
 	for _, e := range entries {
+		facets := make([]search.FacetVector, 0, len(e.Embeddings))
+		for _, fe := range e.Embeddings {
+			facets = append(facets, search.FacetVector{
+				Facet:  fe.Facet,
+				Vector: fe.Vector,
+			})
+		}
 		searchEntries = append(searchEntries, search.Entry{
 			Path:        e.Path,
 			Description: e.Description,
-			Embedding:   e.Embedding,
+			Facets:      facets,
 		})
 	}
 

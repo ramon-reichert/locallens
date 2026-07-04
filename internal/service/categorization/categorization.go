@@ -44,31 +44,35 @@ func (f Facets) IsEmpty() bool {
 	return strings.TrimSpace(f.Scene) == "" && len(f.Objects) == 0 && len(f.Actions) == 0 && len(f.Attributes) == 0
 }
 
-// EmbedText serializes the facets into a single labeled string suitable for
-// embedding. Empty facets are omitted so the embedder never sees dangling
-// labels.
-func (f Facets) EmbedText() string {
-	var b strings.Builder
-	if s := strings.TrimSpace(f.Scene); s != "" {
-		fmt.Fprintf(&b, "Scene: %s\n", s)
-	}
-	writeFacet(&b, "Objects", f.Objects)
-	writeFacet(&b, "Actions", f.Actions)
-	writeFacet(&b, "Attributes", f.Attributes)
-	return strings.TrimRight(b.String(), "\n")
+// FacetText pairs a facet name with its content text, ready to embed.
+type FacetText struct {
+	Name string
+	Text string
 }
 
-func writeFacet(b *strings.Builder, label string, items []string) {
-	if len(items) == 0 {
-		return
+// FacetTexts returns the content of each non-empty facet, one entry per facet.
+// The text is content-only (no labels): Scene as-is, the list facets joined
+// with ", ". Each entry becomes its own embedding vector.
+func (f Facets) FacetTexts() []FacetText {
+	var out []FacetText
+	if s := strings.TrimSpace(f.Scene); s != "" {
+		out = append(out, FacetText{Name: "scene", Text: s})
 	}
-	fmt.Fprintf(b, "%s: %s\n", label, strings.Join(items, ", "))
+	if len(f.Objects) > 0 {
+		out = append(out, FacetText{Name: "objects", Text: strings.Join(f.Objects, ", ")})
+	}
+	if len(f.Actions) > 0 {
+		out = append(out, FacetText{Name: "actions", Text: strings.Join(f.Actions, ", ")})
+	}
+	if len(f.Attributes) > 0 {
+		out = append(out, FacetText{Name: "attributes", Text: strings.Join(f.Attributes, ", ")})
+	}
+	return out
 }
 
 // CategorizeResult holds the output of a Categorize call.
 type CategorizeResult struct {
 	Facets             Facets
-	EmbedText          string
 	TimeToFirstTokenMS float64
 	TokensPerSecond    float64
 }
@@ -221,18 +225,28 @@ func (c *Categorizer) Categorize(ctx context.Context, description string) (Categ
 		return CategorizeResult{}, fmt.Errorf("parse facets: %w", err)
 	}
 
+	// Small models ignore length instructions, so enforce the scene cap here.
+	facets.Scene = trimScene(facets.Scene, c.prompt.SceneMaxWords)
+
 	if facets.IsEmpty() {
 		return CategorizeResult{}, errors.New("categorize: empty facets")
 	}
 
 	result := CategorizeResult{
 		Facets:             facets,
-		EmbedText:          facets.EmbedText(),
 		TimeToFirstTokenMS: resp.Usage.TimeToFirstTokenMS,
 		TokensPerSecond:    resp.Usage.TokensPerSecond,
 	}
 
-	c.log(ctx, "categorize", "elapsed time", time.Since(start), "facets", result.EmbedText)
+	// Print the facet texts exactly as they are embedded (content-only,
+	// comma-joined) so the service-test output matches the embedder input.
+	c.log(ctx, "categorize",
+		"elapsed time", time.Since(start),
+		"scene", facets.Scene,
+		"objects", strings.Join(facets.Objects, ", "),
+		"actions", strings.Join(facets.Actions, ", "),
+		"attributes", strings.Join(facets.Attributes, ", "),
+	)
 
 	return result, nil
 }
@@ -245,6 +259,21 @@ func parseFacets(data []byte) (Facets, error) {
 		return Facets{}, err
 	}
 	return f, nil
+}
+
+// trimScene caps s to at most maxWords words, dropping any trailing dangling
+// punctuation left by the cut. maxWords <= 0 leaves s unchanged (only
+// surrounding whitespace is trimmed).
+func trimScene(s string, maxWords int) string {
+	s = strings.TrimSpace(s)
+	if maxWords <= 0 {
+		return s
+	}
+	words := strings.Fields(s)
+	if len(words) <= maxWords {
+		return s
+	}
+	return strings.TrimRight(strings.Join(words[:maxWords], " "), " ,;:.-")
 }
 
 func validateChatResponse(resp model.ChatResponse) (model.Choice, error) {

@@ -116,6 +116,13 @@ type CategorizePrompt struct {
 	UserPrompt   string  `json:"userPrompt"`
 	MaxTokens    int     `json:"maxTokens"`
 	Temperature  float64 `json:"temperature"`
+
+	// SceneMaxWords hard-caps the "scene" facet to at most this many words,
+	// enforced in code after the model replies. Small models don't reliably
+	// obey length instructions in the prompt, and the JSON-schema grammar
+	// can't express a maxLength, so this is the only reliable lever.
+	// 0 disables trimming.
+	SceneMaxWords int `json:"sceneMaxWords"`
 }
 
 // ImageConfig holds image preprocessing settings.
@@ -203,16 +210,20 @@ func Defaults() Config {
 			FrequencyPenalty: 0.5,
 		},
 		CategorizePrompt: CategorizePrompt{ // TODO: check if this prompt can be cached
-			SystemPrompt: "You extract info from an image description and organize it into search indexes. " +
-				"Reply with a JSON object with one string key and three array-of-string keys: " +
-				"\"objects\" (simple list of nouns, noun chunks, and key entities, including useful synonyms - use no sentences, just terms), " +
-				"\"actions\" (simple list of verbs and phrasal verbs - use no sentences, just terms in infinitive tense), and " +
-				"\"attributes\" (simple list - use no sentences, just terms - of most proeminent aspects of the image, like main colors, style, lighting, mood, time of day, feeling - do not add labels, do not repeat the terms listed as objects). " +
-				"\"scene\" (a string: just one clause sentence (shortened, with 30 tokens at most) picking only the main subject of the image - do not add details that belong to other facets; be concise and confident), " +
-				"Use only information present in the description, but filter unnecessary natural speech words to build just objective lists. If some facet do not apply, live it empty.",
-			UserPrompt:  "Categorize this image description into search facets:",
-			MaxTokens:   300,
-			Temperature: 0.1,
+			SystemPrompt: "You turn an image description into compact search facets. " +
+				"Reply with a JSON object with these keys, in this order:\n" +
+				"\"scene\": a string. A short caption summarizing only the main subject, about 15 words maximum. Do not add details that belong to the other facets.\n" +
+				"\"objects\": an array of strings. Nouns, noun chunks, and key named entities, plus useful synonyms. Terms only, no sentences.\n" +
+				"\"actions\": an array of strings. Verbs and phrasal verbs in the infinitive. Terms only, no sentences.\n" +
+				"\"attributes\": an array of strings. Prominent qualities such as main colors, style, lighting, mood, time of day, and feeling. Terms only, no labels, and do not repeat object terms.\n" +
+				"Use only information present in the description. Drop filler words. Leave a facet empty if it does not apply.\n" +
+				"Example:\n" +
+				"Description: A bright yellow parrot with green wings is perched on a mossy branch in a dense tropical forest, looking around calmly.\n" +
+				"JSON: {\"scene\":\"A parrot called Bob perched on a forest branch\",\"objects\":[\"parrot\",\"Bob\",\"bird\",\"branch\",\"forest\",\"moss\"],\"actions\":[\"perch\",\"look around\"],\"attributes\":[\"yellow\",\"green\",\"bright\",\"tropical\",\"calm\"]}",
+			UserPrompt:    "Categorize this image description into search facets:",
+			MaxTokens:     300,
+			Temperature:   0.1,
+			SceneMaxWords: 15,
 		},
 		Image: ImageConfig{
 			MaxSide: 512,
