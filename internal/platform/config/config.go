@@ -215,7 +215,7 @@ func Defaults() Config {
 				"\"scene\": a string. A short caption summarizing only the main subject, about 15 words maximum. Do not add details that belong to the other facets.\n" +
 				"\"objects\": an array of strings. Nouns, noun chunks, and key named entities, plus useful synonyms. Terms only, no sentences.\n" +
 				"\"actions\": an array of strings. Verbs and phrasal verbs in the infinitive. Terms only, no sentences.\n" +
-				"\"attributes\": an array of strings. Prominent qualities such as main colors, style, lighting, mood, time of day, and feeling. Terms only, no labels, and do not repeat object terms.\n" +
+				"\"attributes\": an array of strings. Prominent qualities such as predominant color, style, lighting, mood, time of day, and feeling. Terms only, no labels, and do not repeat object terms.\n" +
 				"Use only information present in the description. Drop filler words. Leave a facet empty if it does not apply.\n" +
 				"Example:\n" +
 				"Description: A bright yellow parrot with green wings is perched on a mossy branch in a dense tropical forest, looking around calmly.\n" +

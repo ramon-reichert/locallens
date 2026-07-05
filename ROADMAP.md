@@ -1,8 +1,9 @@
 # To-do:
 
 - Licensing?
-- Adjust embedding flow to be more accurate. Maybe using grammar (Kronk);
-- Make performance tests for the embedding too;
+- Adjust embedding flow to be more accurate. Maybe using grammar (Kronk); Maybe one embed for expression (2-5 words)?
+- Update the performance tests for the embedding;
+- Update agents and readme with new flow and kronk usage
 
 - Check "per-request allocation" error with vulkan (and maybe other processors) -> T-019dfff7-3572-72cc-bede-689295bad366
   - last kronk version before the bug is v1.24.8, with Llama.cpp pinned to version b9247 for compatibility.
@@ -15,7 +16,7 @@
 - Search for "TODO" along the codebase;
 
 - Review and correct indexing/searching recursiveness code; Add recursiveness test too;
-
+- Add search by name to the folders browser;
 
 # Future features
 

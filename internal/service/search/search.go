@@ -2,9 +2,7 @@
 package search
 
 import (
-	"fmt"
 	"math"
-	"path/filepath"
 	"sort"
 )
 
@@ -32,18 +30,27 @@ type Entry struct {
 }
 
 // aggregate combines per-facet similarity scores into a single image score.
-// The current strategy is the mean: an image is scored by how well the query
-// matches its facets on average, so images are not favored simply for having
-// more facets. Swap this one function to try sum, max, or a weighted scheme.
+// The most proeminent score is amplified over the mean.
 func aggregate(scores []float32) float32 {
 	if len(scores) == 0 {
 		return 0
 	}
+	//maximum score:
+	max := scores[0]
+	for _, v := range scores[1:] {
+		if v > max {
+			max = v
+		}
+	}
+
+	//mean score:
 	var total float32
 	for _, s := range scores {
 		total += s
 	}
-	return total / float32(len(scores))
+	mean := total / float32(len(scores))
+
+	return (mean * 0.5) + (max * 0.5) // This rate defines the search specialization
 }
 
 // FindTopK finds the top-k images most similar to the query vector. Each image
@@ -80,14 +87,6 @@ func FindTopK(query []float32, entries []Entry, k int) []Result {
 	if k > len(results) {
 		k = len(results)
 	}
-
-	// debug code:
-	for _, img := range results[:k] {
-
-		fmt.Println(filepath.Base(img.Path), "average score: ", img.Score, "facets scores: ", img.FacetScores)
-	}
-
-	//------------
 
 	return results[:k]
 }

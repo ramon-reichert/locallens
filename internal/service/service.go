@@ -468,9 +468,14 @@ func (s *Service) Search(ctx context.Context, folderPath string, query string, k
 		})
 	}
 
+	results := search.FindTopK(queryVec, searchEntries, k)
+
+	for _, img := range results {
+		s.log(ctx, filepath.Base(img.Path), "aggregate score", img.Score, "facets scores", img.FacetScores)
+	}
 	s.log(ctx, "::::::::::::")
 
-	return search.FindTopK(queryVec, searchEntries, k), nil
+	return results, nil
 }
 
 // IndexInfo returns the number of indexed images in a folder.
