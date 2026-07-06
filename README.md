@@ -9,15 +9,30 @@ If you liked it, please consider giving this project a star on GitHub! Thank you
 
 ## Kronk SDK usage
 
-LocalLens uses Kronk for three main capabilities:
+LocalLens uses Kronk for several capabilities:
 
-- **Local runtime setup** — Kronk initializes the llama.cpp runtime and selects the available processor backend, such as CPU, CUDA, Vulkan, Metal, or another supported option. LocalLens can also download the required llama.cpp libraries during setup.
+- **Local runtime setup** — Kronk initializes the llama.cpp runtime and selects the available processor backend, such as CPU, CUDA, Vulkan, Metal, or another supported option. LocalLens can also download the required llama.cpp libraries during setup, and pins a specific llama.cpp build for release stability.
 
-- **Model management** — Kronk downloads and resolves the local model files used by the app. LocalLens currently uses a small vision-language model to describe images and an embedding model to convert text into searchable vectors.
+- **Model management** — Kronk downloads and resolves the local model files used by the app. LocalLens runs **three small models**: a vision-language model (Qwen2-VL-2B) to describe images, a tiny chat model (Qwen3-0.6B) to turn those descriptions into search terms, and an embedding model (embeddinggemma-300m) to convert text into searchable vectors. Each one performing their own specialty.
 
-- **Local inference** — Kronk loads the models and runs inference directly on the user’s machine. LocalLens uses Kronk’s chat-style vision API to turn images into text descriptions, and its embeddings API to turn both descriptions and search queries into vectors.
+- **Local inference** — Kronk loads the models and runs inference directly on the user’s machine. LocalLens uses Kronk’s chat-style vision API to turn images into text descriptions, a second chat call to categorize them, and the embeddings API to turn both terms and search queries into vectors.
 
-With these pieces, LocalLens can index a folder of images, describe each image locally, embed those descriptions, and later match natural language searches against them — all offline and without sending files or prompts to an external service.
+- **Grammar-constrained output** — the categorization step passes a JSON schema to Kronk, which converts it into a GBNF grammar and forces the model to emit *only* valid JSON. This turns a tiny 0.6B model into a reliable structured-output extractor with no fragile text parsing. (Qwen3’s `<think>` reasoning is also disabled via the request parameters for faster, more stable output.)
+
+- **Anti-repetition sampling** — small vision models tend to loop or hallucinate on text-heavy images. LocalLens exposes Kronk’s **DRY (Don’t Repeat Yourself)** sampler plus repeat/frequency/presence penalties as request parameters. DRY penalizes repeated multi-word n-gram sequences
+without suppressing legitimately repeated words, which cleanly breaks those loops.
+
+With these pieces, LocalLens can index a folder of images, describe each image locally, reorganize each description into compact search terms, embed them, and later match natural language searches against them — all offline and without sending files or prompts to an external service.
+
+## How LocalLens builds good search vectors
+
+Getting relevant results from *small* local models takes more than embedding the raw description. Aside from Kronk itself, this pipeline and its ranking are what make LocalLens interesting:
+
+- **Describe, then distill.** The vision model writes a free-form paragraph about each image. Embedding that whole paragraph into a single vector blends many unrelated concepts together and matches queries poorly. So a second, tiny model reshapes the paragraph into a short list of **self-contained “search expressions”** — a dozen or so 2–6 word phrases like *“bright yellow parrot”* or *“dense tropical forest”*. Each phrase is a clean, focused unit to embed.
+
+- **One vector per expression.** Instead of a single vector per image, LocalLens stores one embedding per expression. A query then matches against each expression individually, so a precise match on one aspect of an image isn’t drowned out by everything else in the picture.
+
+- **Ranking that balances precision and coverage.** At search time, each image’s score combines the **average** similarity across its expressions with its **single best** matching expression (a 50/50 blend). Pure averaging under-weights a strong, specific match; pure “best match” rewards noise. Blending the two keeps sharp, specific matches near the top while still favoring images that fit the query on multiple fronts. This balance was arrived at by testing sum-, mean-, and max-based ranking, and is a knob that can be tuned toward broader or more specialized results.
 
 ## How to Use LocalLens
 

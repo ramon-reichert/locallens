@@ -1,11 +1,11 @@
-// Package categorization turns a prose image description into four
+// Package categorization turns a prose image description into a compact list of
 // search-oriented expressions using a small chat model (e.g. Qwen3-0.6B).
 //
 // The vision model produces a free-form paragraph; that paragraph is hard to
 // embed well because it mixes many concepts into one blob. This step asks a
-// tiny, grammar-constrained chat model to reshape the paragraph into four
-// labeled lists — Scene, Objects, Actions, Attributes — which are then
-// serialized into a single, embedding-friendly string.
+// tiny, grammar-constrained chat model to reshape the paragraph into a flat
+// list of short (2-6 word) "expressions" — each a self-contained phrase that
+// embeds cleanly and is later vectorized individually for search.
 package categorization
 
 import (

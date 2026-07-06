@@ -1,8 +1,7 @@
 # To-do:
 
 - Licensing?
-- Adjust embedding flow to be more accurate. Maybe using grammar (Kronk); Maybe one embed for expression (2-5 words)?
-- Update agents and readme with new flow and kronk usage
+- Adjust scores logging
 - Check possible use of system prompt caching for vision and chat models
 
 - Check "per-request allocation" error with vulkan (and maybe other processors) -> T-019dfff7-3572-72cc-bede-689295bad366
