@@ -25,7 +25,3 @@ test-service:
 # Run vision model performance benchmarks across config and image size variants.
 test-performance-vision:
 	CGO_ENABLED=0 go test -mod=vendor -tags "integration" -timeout 60m -v -run TestVisionPerformance ./internal/service/tests/performance/...
-
-# Run embedding similarity tests to evaluate search quality.
-test-performance-similarity:
-	CGO_ENABLED=0 go test -mod=vendor -tags "integration" -v -run TestSimilarity ./internal/service/tests/performance/...

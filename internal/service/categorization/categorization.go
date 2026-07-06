@@ -1,5 +1,5 @@
 // Package categorization turns a prose image description into four
-// search-oriented facets using a small chat model (e.g. Qwen3-0.6B).
+// search-oriented expressions using a small chat model (e.g. Qwen3-0.6B).
 //
 // The vision model produces a free-form paragraph; that paragraph is hard to
 // embed well because it mixes many concepts into one blob. This step asks a
@@ -29,50 +29,21 @@ var (
 	ErrEmptyText      = errors.New("empty description")
 )
 
-// Facets holds the four search-oriented categories extracted from a
-// description. Scene is a short natural-language summary; the other three are
-// lists of discrete keywords/expressions.
-type Facets struct {
-	Scene      string   `json:"scene"`      // concise natural-language summary (1–2 sentences)
-	Objects    []string `json:"objects"`    // nouns and key entities, including useful synonyms
-	Actions    []string `json:"actions"`    // verbs and subject–object relationships
-	Attributes []string `json:"attributes"` // colors, materials, style, lighting, mood, time of day
+// Expressions holds the search-oriented expressions extracted from a description.
+type Expressions []string
+
+type expressionsResponse struct {
+	Expressions []string `json:"expressions"`
 }
 
-// IsEmpty reports whether every facet is empty.
-func (f Facets) IsEmpty() bool {
-	return strings.TrimSpace(f.Scene) == "" && len(f.Objects) == 0 && len(f.Actions) == 0 && len(f.Attributes) == 0
-}
-
-// FacetText pairs a facet name with its content text, ready to embed.
-type FacetText struct {
-	Name string
-	Text string
-}
-
-// FacetTexts returns the content of each non-empty facet, one entry per facet.
-// The text is content-only (no labels): Scene as-is, the list facets joined
-// with ", ". Each entry becomes its own embedding vector.
-func (f Facets) FacetTexts() []FacetText {
-	var out []FacetText
-	if s := strings.TrimSpace(f.Scene); s != "" {
-		out = append(out, FacetText{Name: "scene", Text: s})
-	}
-	if len(f.Objects) > 0 {
-		out = append(out, FacetText{Name: "objects", Text: strings.Join(f.Objects, ", ")})
-	}
-	if len(f.Actions) > 0 {
-		out = append(out, FacetText{Name: "actions", Text: strings.Join(f.Actions, ", ")})
-	}
-	if len(f.Attributes) > 0 {
-		out = append(out, FacetText{Name: "attributes", Text: strings.Join(f.Attributes, ", ")})
-	}
-	return out
+// IsEmpty reports whether there are no expressions.
+func (e Expressions) IsEmpty() bool {
+	return len(e) == 0
 }
 
 // CategorizeResult holds the output of a Categorize call.
 type CategorizeResult struct {
-	Facets             Facets
+	Expressions        Expressions
 	TimeToFirstTokenMS float64
 	TokensPerSecond    float64
 }
@@ -165,21 +136,18 @@ func (c *Categorizer) IsLoaded() bool {
 	return c.krn != nil
 }
 
-// facetsSchema is the JSON schema the model output is constrained to. Kronk
+// expressionsSchema is the JSON schema the model output is constrained to. Kronk
 // converts it to a GBNF grammar so the model can only emit a JSON object with
-// a string "scene" and three array-of-string facets.
-var facetsSchema = model.D{
+// one array-of-string field.
+var expressionsSchema = model.D{
 	"type": "object",
 	"properties": model.D{
-		"scene":      model.D{"type": "string"},
-		"objects":    model.D{"type": "array", "items": model.D{"type": "string"}},
-		"actions":    model.D{"type": "array", "items": model.D{"type": "string"}},
-		"attributes": model.D{"type": "array", "items": model.D{"type": "string"}},
+		"expressions": model.D{"type": "array", "items": model.D{"type": "string"}},
 	},
-	"required": []string{"scene", "objects", "actions", "attributes"},
+	"required": []string{"expressions"},
 }
 
-// Categorize turns a prose description into four search-oriented facets.
+// Categorize turns a prose description into search-oriented expressions.
 func (c *Categorizer) Categorize(ctx context.Context, description string) (CategorizeResult, error) {
 	c.mu.Lock()
 	krn := c.krn
@@ -205,7 +173,7 @@ func (c *Categorizer) Categorize(ctx context.Context, description string) (Categ
 		"temperature":     p.Temperature,
 		"max_tokens":      p.MaxTokens,
 		"enable_thinking": false, // Qwen3: skip <think> reasoning for speed and stable output
-		"json_schema":     facetsSchema,
+		"json_schema":     expressionsSchema,
 	}
 
 	start := time.Now()
@@ -220,60 +188,52 @@ func (c *Categorizer) Categorize(ctx context.Context, description string) (Categ
 		return CategorizeResult{}, err
 	}
 
-	facets, err := parseFacets([]byte(choice.Message.Content))
+	expressions, err := parseExpressions([]byte(choice.Message.Content))
 	if err != nil {
-		return CategorizeResult{}, fmt.Errorf("parse facets: %w", err)
+		return CategorizeResult{}, fmt.Errorf("parse expressions: %w", err)
 	}
 
-	// Small models ignore length instructions, so enforce the scene cap here.
-	facets.Scene = trimScene(facets.Scene, c.prompt.SceneMaxWords)
-
-	if facets.IsEmpty() {
-		return CategorizeResult{}, errors.New("categorize: empty facets")
+	if expressions.IsEmpty() {
+		return CategorizeResult{}, errors.New("categorize: empty expressions")
 	}
 
 	result := CategorizeResult{
-		Facets:             facets,
+		Expressions:        expressions,
 		TimeToFirstTokenMS: resp.Usage.TimeToFirstTokenMS,
 		TokensPerSecond:    resp.Usage.TokensPerSecond,
 	}
 
-	// Print the facet texts exactly as they are embedded (content-only,
+	// Print the expression text exactly as it is embedded (content-only,
 	// comma-joined) so the service-test output matches the embedder input.
 	c.log(ctx, "categorize",
 		"elapsed time", time.Since(start),
-		"scene", facets.Scene,
-		"objects", strings.Join(facets.Objects, ", "),
-		"actions", strings.Join(facets.Actions, ", "),
-		"attributes", strings.Join(facets.Attributes, ", "),
+		"expressions", strings.Join(expressions, ", "),
 	)
 
 	return result, nil
 }
 
-// parseFacets decodes the model's JSON output into Facets. It is a pure
+// parseExpressions decodes the model's JSON output into Expressions. It is a pure
 // function (no model) so it can be unit-tested directly.
-func parseFacets(data []byte) (Facets, error) {
-	var f Facets
-	if err := json.Unmarshal(data, &f); err != nil {
-		return Facets{}, err
+func parseExpressions(data []byte) (Expressions, error) {
+	var resp expressionsResponse
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return Expressions{}, err
 	}
-	return f, nil
-}
 
-// trimScene caps s to at most maxWords words, dropping any trailing dangling
-// punctuation left by the cut. maxWords <= 0 leaves s unchanged (only
-// surrounding whitespace is trimmed).
-func trimScene(s string, maxWords int) string {
-	s = strings.TrimSpace(s)
-	if maxWords <= 0 {
-		return s
+	expressions := make(Expressions, 0, min(len(resp.Expressions), 15))
+	for _, expression := range resp.Expressions {
+		expression = strings.TrimSpace(expression)
+		if expression == "" {
+			continue
+		}
+		expressions = append(expressions, expression)
+		if len(expressions) == 15 {
+			break
+		}
 	}
-	words := strings.Fields(s)
-	if len(words) <= maxWords {
-		return s
-	}
-	return strings.TrimRight(strings.Join(words[:maxWords], " "), " ,;:.-")
+
+	return expressions, nil
 }
 
 func validateChatResponse(resp model.ChatResponse) (model.Choice, error) {

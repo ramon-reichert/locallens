@@ -5,18 +5,18 @@ import (
 	"sync"
 )
 
-// FacetEmbedding is the embedding of a single image facet (e.g. "objects").
-type FacetEmbedding struct {
-	Facet  string
-	Vector []float32
+// ExpressionEmbedding is the embedding of a single image search expression.
+type ExpressionEmbedding struct {
+	Expression string
+	Vector     []float32
 }
 
 // Entry represents an indexed image with its description and one embedding
-// vector per non-empty facet.
+// vector per non-empty expression.
 type Entry struct {
 	Path        string
 	Description string
-	Embeddings  []FacetEmbedding
+	Embeddings  []ExpressionEmbedding
 }
 
 // Index stores image embeddings.

@@ -8,14 +8,14 @@ import (
 
 func TestFindTopK(t *testing.T) {
 	entries := []search.Entry{
-		{Path: "dog.jpg", Description: "A brown dog", Facets: []search.FacetVector{
-			{Facet: "scene", Vector: []float32{1, 0, 0, 0}},
+		{Path: "dog.jpg", Description: "A brown dog", Expressions: []search.ExpressionVector{
+			{Expression: "scene", Vector: []float32{1, 0, 0, 0}},
 		}},
-		{Path: "cat.jpg", Description: "A white cat", Facets: []search.FacetVector{
-			{Facet: "scene", Vector: []float32{0, 1, 0, 0}},
+		{Path: "cat.jpg", Description: "A white cat", Expressions: []search.ExpressionVector{
+			{Expression: "scene", Vector: []float32{0, 1, 0, 0}},
 		}},
-		{Path: "bird.jpg", Description: "A blue bird", Facets: []search.FacetVector{
-			{Facet: "scene", Vector: []float32{0, 0, 1, 0}},
+		{Path: "bird.jpg", Description: "A blue bird", Expressions: []search.ExpressionVector{
+			{Expression: "scene", Vector: []float32{0, 0, 1, 0}},
 		}},
 	}
 
@@ -33,22 +33,22 @@ func TestFindTopK(t *testing.T) {
 	t.Logf("top result: %s (score: %.4f)", results[0].Path, results[0].Score)
 }
 
-// TestFindTopK_AveragesFacetScores verifies that images are scored by the mean
-// of their per-facet similarities — so an image with one strong facet outranks
-// an image whose extra facet dilutes the average — and that FacetScores is
-// populated per facet.
-func TestFindTopK_AveragesFacetScores(t *testing.T) {
+// TestFindTopK_AggregatesExpressionScores verifies that images are scored from
+// their per-expression similarities and that ExpressionScores is populated per
+// expression.
+func TestFindTopK_AveragesExpressionScores(t *testing.T) {
 	query := []float32{1, 0, 0, 0}
 
 	entries := []search.Entry{
-		// One perfectly-matching facet: mean = 1.0.
-		{Path: "precise.jpg", Facets: []search.FacetVector{
-			{Facet: "objects", Vector: []float32{1, 0, 0, 0}},
+		// One perfectly-matching expression: mean = 1.0.
+		{Path: "precise.jpg", Expressions: []search.ExpressionVector{
+			{Expression: "objects", Vector: []float32{1, 0, 0, 0}},
 		}},
-		// Same strong facet plus an unrelated one: mean = (1.0 + 0) / 2 = 0.5.
-		{Path: "diluted.jpg", Facets: []search.FacetVector{
-			{Facet: "objects", Vector: []float32{1, 0, 0, 0}},
-			{Facet: "attributes", Vector: []float32{0, 1, 0, 0}},
+		// Same strong expression plus an unrelated one: mean = 0.5, max = 1.0,
+		// aggregate = 0.75.
+		{Path: "diluted.jpg", Expressions: []search.ExpressionVector{
+			{Expression: "objects", Vector: []float32{1, 0, 0, 0}},
+			{Expression: "attributes", Vector: []float32{0, 1, 0, 0}},
 		}},
 	}
 
@@ -64,27 +64,28 @@ func TestFindTopK_AveragesFacetScores(t *testing.T) {
 		t.Errorf("average score not greater: precise=%.4f diluted=%.4f", results[0].Score, results[1].Score)
 	}
 
-	// Averaging must not reward the extra facet: diluted ≈ 0.5, precise ≈ 1.0.
+	// Aggregation must not reward the extra expression: diluted ≈ 0.75,
+	// precise ≈ 1.0.
 	if results[0].Score < 0.99 {
-		t.Errorf("precise.jpg mean = %.4f, want ~1.0", results[0].Score)
+		t.Errorf("precise.jpg aggregate = %.4f, want ~1.0", results[0].Score)
 	}
-	if results[1].Score > 0.51 || results[1].Score < 0.49 {
-		t.Errorf("diluted.jpg mean = %.4f, want ~0.5", results[1].Score)
+	if results[1].Score > 0.76 || results[1].Score < 0.74 {
+		t.Errorf("diluted.jpg aggregate = %.4f, want ~0.75", results[1].Score)
 	}
 
 	diluted := results[1]
-	if len(diluted.FacetScores) != 2 {
-		t.Errorf("expected 2 facet scores for diluted.jpg, got %d", len(diluted.FacetScores))
+	if len(diluted.ExpressionScores) != 2 {
+		t.Errorf("expected 2 expression scores for diluted.jpg, got %d", len(diluted.ExpressionScores))
 	}
-	if _, ok := diluted.FacetScores["attributes"]; !ok {
-		t.Errorf("expected an 'attributes' facet score, got %v", diluted.FacetScores)
+	if _, ok := diluted.ExpressionScores["attributes"]; !ok {
+		t.Errorf("expected an 'attributes' expression score, got %v", diluted.ExpressionScores)
 	}
 }
 
 func TestFindTopK_LessThanK(t *testing.T) {
 	entries := []search.Entry{
-		{Path: "a.jpg", Description: "A", Facets: []search.FacetVector{
-			{Facet: "scene", Vector: []float32{1, 0}},
+		{Path: "a.jpg", Description: "A", Expressions: []search.ExpressionVector{
+			{Expression: "scene", Vector: []float32{1, 0}},
 		}},
 	}
 

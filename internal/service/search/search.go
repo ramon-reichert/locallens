@@ -6,10 +6,10 @@ import (
 	"sort"
 )
 
-// FacetVector is one facet's embedding for a searchable image.
-type FacetVector struct {
-	Facet  string
-	Vector []float32
+// ExpressionVector is one expression's embedding for a searchable image.
+type ExpressionVector struct {
+	Expression string
+	Vector     []float32
 }
 
 // Result represents a search result with similarity score.
@@ -17,19 +17,19 @@ type Result struct {
 	Path        string
 	Description string
 	Score       float32
-	// FacetScores holds the per-facet cosine similarity to the query, keyed by
-	// facet name. Useful for auditing why an image ranked where it did.
-	FacetScores map[string]float32
+	// ExpressionScores holds the per-expression cosine similarity to the query, keyed by
+	// expression name. Useful for auditing why an image ranked where it did.
+	ExpressionScores map[string]float32
 }
 
-// Entry represents a searchable item with one embedding vector per facet.
+// Entry represents a searchable item with one embedding vector per expression.
 type Entry struct {
 	Path        string
 	Description string
-	Facets      []FacetVector
+	Expressions []ExpressionVector
 }
 
-// aggregate combines per-facet similarity scores into a single image score.
+// aggregate combines per-expression similarity scores into a single image score.
 // The most proeminent score is amplified over the mean.
 func aggregate(scores []float32) float32 {
 	if len(scores) == 0 {
@@ -55,7 +55,7 @@ func aggregate(scores []float32) float32 {
 
 // FindTopK finds the top-k images most similar to the query vector. Each image
 // is scored by aggregating the query's cosine similarity against every one of
-// its facet vectors.
+// its expression vectors.
 func FindTopK(query []float32, entries []Entry, k int) []Result {
 	if len(entries) == 0 || k <= 0 {
 		return nil
@@ -64,19 +64,19 @@ func FindTopK(query []float32, entries []Entry, k int) []Result {
 	results := make([]Result, 0, len(entries))
 
 	for _, entry := range entries {
-		facetScores := make(map[string]float32, len(entry.Facets))
-		scores := make([]float32, 0, len(entry.Facets))
-		for _, fv := range entry.Facets {
+		expressionScores := make(map[string]float32, len(entry.Expressions))
+		scores := make([]float32, 0, len(entry.Expressions))
+		for _, fv := range entry.Expressions {
 			s := CosineSimilarity(query, fv.Vector)
-			facetScores[fv.Facet] = s
+			expressionScores[fv.Expression] = s
 			scores = append(scores, s)
 		}
 
 		results = append(results, Result{
-			Path:        entry.Path,
-			Description: entry.Description,
-			Score:       aggregate(scores),
-			FacetScores: facetScores,
+			Path:             entry.Path,
+			Description:      entry.Description,
+			Score:            aggregate(scores),
+			ExpressionScores: expressionScores,
 		})
 	}
 

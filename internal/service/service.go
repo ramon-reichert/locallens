@@ -241,7 +241,7 @@ func (s *Service) indexFolder(ctx context.Context, folderPath string, tracker *i
 
 		s.log(ctx, "embed image", "path", imgPath)
 
-		embeddings, embedMS, err := s.embedFacets(ctx, catResult.Facets.FacetTexts())
+		embeddings, embedMS, err := s.embedExpressions(ctx, catResult.Expressions)
 		if err != nil {
 			s.log(ctx, "embed error", "path", imgPath, "error", err)
 			failed++
@@ -399,29 +399,41 @@ func (t *indexProgressTracker) recordFailed(imgPath string, imgElapsed time.Dura
 	})
 }
 
-// embedFacets embeds each facet text into its own vector, returning one
-// index.FacetEmbedding per facet plus the total embed time in milliseconds.
-// It fails if any facet fails to embed or if there are no facets to embed.
-func (s *Service) embedFacets(ctx context.Context, facetTexts []categorization.FacetText) ([]index.FacetEmbedding, int64, error) {
-	if len(facetTexts) == 0 {
-		return nil, 0, fmt.Errorf("no facets to embed")
+// embedExpressions embeds each expression into its own vector, returning one
+// index.ExpressionEmbedding per expression plus the total embed time in
+// milliseconds. It fails if any expression fails to embed or if there are no
+// expressions to embed.
+func (s *Service) embedExpressions(ctx context.Context, expressions categorization.Expressions) ([]index.ExpressionEmbedding, int64, error) {
+	if len(expressions) == 0 {
+		return nil, 0, fmt.Errorf("no expressions to embed")
 	}
 
-	embeddings := make([]index.FacetEmbedding, 0, len(facetTexts))
+	embeddings := make([]index.ExpressionEmbedding, 0, min(len(expressions), 15))
 	var totalMS int64
 
-	for _, ft := range facetTexts {
+	for _, expression := range expressions {
+		expression = strings.TrimSpace(expression)
+		if expression == "" {
+			continue
+		}
 		embedCtx, embedCancel := context.WithTimeout(ctx, embedTimeout)
-		embedResult, err := s.embedder.Embed(embedCtx, ft.Text)
+		embedResult, err := s.embedder.Embed(embedCtx, expression)
 		embedCancel()
 		if err != nil {
-			return nil, 0, fmt.Errorf("embed facet %q: %w", ft.Name, err)
+			return nil, 0, fmt.Errorf("embed expression %q: %w", expression, err)
 		}
-		embeddings = append(embeddings, index.FacetEmbedding{
-			Facet:  ft.Name,
-			Vector: embedResult.Embedding,
+		embeddings = append(embeddings, index.ExpressionEmbedding{
+			Expression: expression,
+			Vector:     embedResult.Embedding,
 		})
 		totalMS += embedResult.Elapsed.Milliseconds()
+		if len(embeddings) == 15 {
+			break
+		}
+	}
+
+	if len(embeddings) == 0 {
+		return nil, 0, fmt.Errorf("no expressions to embed")
 	}
 
 	return embeddings, totalMS, nil
@@ -454,24 +466,24 @@ func (s *Service) Search(ctx context.Context, folderPath string, query string, k
 
 	searchEntries := make([]search.Entry, 0, len(entries))
 	for _, e := range entries {
-		facets := make([]search.FacetVector, 0, len(e.Embeddings))
+		expressions := make([]search.ExpressionVector, 0, len(e.Embeddings))
 		for _, fe := range e.Embeddings {
-			facets = append(facets, search.FacetVector{
-				Facet:  fe.Facet,
-				Vector: fe.Vector,
+			expressions = append(expressions, search.ExpressionVector{
+				Expression: fe.Expression,
+				Vector:     fe.Vector,
 			})
 		}
 		searchEntries = append(searchEntries, search.Entry{
 			Path:        e.Path,
 			Description: e.Description,
-			Facets:      facets,
+			Expressions: expressions,
 		})
 	}
 
 	results := search.FindTopK(queryVec, searchEntries, k)
 
 	for _, img := range results {
-		s.log(ctx, filepath.Base(img.Path), "aggregate score", img.Score, "facets scores", img.FacetScores)
+		s.log(ctx, filepath.Base(img.Path), "aggregate score", img.Score, "expressions scores", img.ExpressionScores)
 	}
 	s.log(ctx, "::::::::::::")
 

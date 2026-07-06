@@ -13,12 +13,12 @@ func TestAddAndGet(t *testing.T) {
 	idx.Add(index.Entry{
 		Path:        "dog.jpg",
 		Description: "A brown dog running through a green field",
-		Embeddings:  []index.FacetEmbedding{{Facet: "scene", Vector: []float32{1, 0, 0, 0}}},
+		Embeddings:  []index.ExpressionEmbedding{{Expression: "scene", Vector: []float32{1, 0, 0, 0}}},
 	})
 	idx.Add(index.Entry{
 		Path:        "cat.jpg",
 		Description: "A white cat sleeping on a couch",
-		Embeddings:  []index.FacetEmbedding{{Facet: "scene", Vector: []float32{0, 1, 0, 0}}},
+		Embeddings:  []index.ExpressionEmbedding{{Expression: "scene", Vector: []float32{0, 1, 0, 0}}},
 	})
 
 	if idx.Len() != 2 {
@@ -43,8 +43,8 @@ func TestAddAndGet(t *testing.T) {
 func TestRemove(t *testing.T) {
 	idx := index.New("")
 
-	idx.Add(index.Entry{Path: "a.jpg", Description: "Image A", Embeddings: []index.FacetEmbedding{{Facet: "scene", Vector: []float32{1, 0}}}})
-	idx.Add(index.Entry{Path: "b.jpg", Description: "Image B", Embeddings: []index.FacetEmbedding{{Facet: "scene", Vector: []float32{0, 1}}}})
+	idx.Add(index.Entry{Path: "a.jpg", Description: "Image A", Embeddings: []index.ExpressionEmbedding{{Expression: "scene", Vector: []float32{1, 0}}}})
+	idx.Add(index.Entry{Path: "b.jpg", Description: "Image B", Embeddings: []index.ExpressionEmbedding{{Expression: "scene", Vector: []float32{0, 1}}}})
 
 	if idx.Len() != 2 {
 		t.Fatalf("expected 2 entries, got %d", idx.Len())
@@ -65,9 +65,9 @@ func TestRemove(t *testing.T) {
 func TestAll(t *testing.T) {
 	idx := index.New("")
 
-	idx.Add(index.Entry{Path: "a.jpg", Description: "A", Embeddings: []index.FacetEmbedding{{Facet: "scene", Vector: []float32{1}}}})
-	idx.Add(index.Entry{Path: "b.jpg", Description: "B", Embeddings: []index.FacetEmbedding{{Facet: "scene", Vector: []float32{2}}}})
-	idx.Add(index.Entry{Path: "c.jpg", Description: "C", Embeddings: []index.FacetEmbedding{{Facet: "scene", Vector: []float32{3}}}})
+	idx.Add(index.Entry{Path: "a.jpg", Description: "A", Embeddings: []index.ExpressionEmbedding{{Expression: "scene", Vector: []float32{1}}}})
+	idx.Add(index.Entry{Path: "b.jpg", Description: "B", Embeddings: []index.ExpressionEmbedding{{Expression: "scene", Vector: []float32{2}}}})
+	idx.Add(index.Entry{Path: "c.jpg", Description: "C", Embeddings: []index.ExpressionEmbedding{{Expression: "scene", Vector: []float32{3}}}})
 
 	all := idx.All()
 	if len(all) != 3 {
@@ -83,12 +83,12 @@ func TestSaveAndLoad(t *testing.T) {
 	idx.Add(index.Entry{
 		Path:        "photo1.jpg",
 		Description: "A sunset over the ocean",
-		Embeddings:  []index.FacetEmbedding{{Facet: "scene", Vector: []float32{0.5, 0.5, 0, 0}}},
+		Embeddings:  []index.ExpressionEmbedding{{Expression: "scene", Vector: []float32{0.5, 0.5, 0, 0}}},
 	})
 	idx.Add(index.Entry{
 		Path:        "photo2.jpg",
 		Description: "Mountains covered in snow",
-		Embeddings:  []index.FacetEmbedding{{Facet: "scene", Vector: []float32{0, 0.5, 0.5, 0}}},
+		Embeddings:  []index.ExpressionEmbedding{{Expression: "scene", Vector: []float32{0, 0.5, 0.5, 0}}},
 	})
 
 	if err := idx.Save(); err != nil {
@@ -114,10 +114,10 @@ func TestSaveAndLoad(t *testing.T) {
 	}
 
 	if len(entry.Embeddings) != 1 {
-		t.Fatalf("expected 1 facet embedding after load, got %d", len(entry.Embeddings))
+		t.Fatalf("expected 1 expression embedding after load, got %d", len(entry.Embeddings))
 	}
-	if entry.Embeddings[0].Facet != "scene" {
-		t.Errorf("unexpected facet name: %s", entry.Embeddings[0].Facet)
+	if entry.Embeddings[0].Expression != "scene" {
+		t.Errorf("unexpected expression name: %s", entry.Embeddings[0].Expression)
 	}
 	want := []float32{0.5, 0.5, 0, 0}
 	if got := entry.Embeddings[0].Vector; len(got) != len(want) {

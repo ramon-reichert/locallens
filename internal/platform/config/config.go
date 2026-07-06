@@ -116,13 +116,6 @@ type CategorizePrompt struct {
 	UserPrompt   string  `json:"userPrompt"`
 	MaxTokens    int     `json:"maxTokens"`
 	Temperature  float64 `json:"temperature"`
-
-	// SceneMaxWords hard-caps the "scene" facet to at most this many words,
-	// enforced in code after the model replies. Small models don't reliably
-	// obey length instructions in the prompt, and the JSON-schema grammar
-	// can't express a maxLength, so this is the only reliable lever.
-	// 0 disables trimming.
-	SceneMaxWords int `json:"sceneMaxWords"`
 }
 
 // ImageConfig holds image preprocessing settings.
@@ -191,7 +184,7 @@ func Defaults() Config {
 			FlashAttention: true,
 		},
 		Categorize: CategorizeModelConfig{
-			ContextWindow: 4096, // room for the prose description plus the JSON facets
+			ContextWindow: 4096, // room for the prose description plus the JSON expressions
 			NBatch:        2048,
 			NUBatch:       512,
 			CacheTypeK:    "Q8_0",
@@ -210,20 +203,17 @@ func Defaults() Config {
 			FrequencyPenalty: 0.5,
 		},
 		CategorizePrompt: CategorizePrompt{ // TODO: check if this prompt can be cached
-			SystemPrompt: "You turn an image description into compact search facets. " +
-				"Reply with a JSON object with these keys, in this order:\n" +
-				"\"scene\": a string. A short caption summarizing only the main subject, about 15 words maximum. Do not add details that belong to the other facets.\n" +
-				"\"objects\": an array of strings. Nouns, noun chunks, and key named entities, plus useful synonyms. Terms only, no sentences.\n" +
-				"\"actions\": an array of strings. Verbs and phrasal verbs in the infinitive. Terms only, no sentences.\n" +
-				"\"attributes\": an array of strings. Prominent qualities such as predominant color, style, lighting, mood, time of day, and feeling. Terms only, no labels, and do not repeat object terms.\n" +
-				"Use only information present in the description. Drop filler words. Leave a facet empty if it does not apply.\n" +
-				"Example:\n" +
-				"Description: A bright yellow parrot with green wings is perched on a mossy branch in a dense tropical forest, looking around calmly.\n" +
-				"JSON: {\"scene\":\"A parrot called Bob perched on a forest branch\",\"objects\":[\"parrot\",\"Bob\",\"bird\",\"branch\",\"forest\",\"moss\"],\"actions\":[\"perch\",\"look around\"],\"attributes\":[\"yellow\",\"green\",\"bright\",\"tropical\",\"calm\"]}",
-			UserPrompt:    "Categorize this image description into search facets:",
-			MaxTokens:     300,
-			Temperature:   0.1,
-			SceneMaxWords: 15,
+			SystemPrompt: "You turn an image description into compact semantic search expressions. " +
+				"Reply with a JSON object with one key, \"expressions\", whose value is an array of strings.\n" +
+				"Return 15 expressions with 2 to 6 words long. Prefer short noun phrases, action phrases, setting phrases, and attribute phrases.\n" +
+				"Preserve relationships when possible, such as subject-action, object-location, color-object, and style-subject.\n" +
+				"Avoid isolated single words unless they are distinctive names, visible text, species, landmarks, or unique objects.\n" +
+				"Create useful synonym or related search phrases.\n" +
+				"Cover different aspects of the image: main subjects, secondary objects, actions, setting, colors, materials, style, mood, text, and context.\n" +
+				"Drop filler words.\n",
+			UserPrompt:  "Extract semantic search expressions from this image description:",
+			MaxTokens:   300,
+			Temperature: 0.3,
 		},
 		Image: ImageConfig{
 			MaxSide: 512,
