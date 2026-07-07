@@ -82,40 +82,32 @@ type CategorizeModelConfig struct {
 
 // VisionPrompt holds prompt configuration for image description.
 type VisionPrompt struct {
-	SystemPrompt string  `json:"systemPrompt"`
-	UserPrompt   string  `json:"userPrompt"`
-	MaxTokens    int     `json:"maxTokens"`
-	Temperature  float64 `json:"temperature"`
-
-	// DRY (Don't Repeat Yourself) sampler. Penalizes repeated n-gram
-	// sequences (multi-word patterns), which prevents the model from getting
-	// stuck in structural loops on text-heavy images while still allowing
-	// legitimate repeated words. DryMultiplier == 0 disables the sampler.
+	SystemPrompt     string  `json:"systemPrompt"`
+	UserPrompt       string  `json:"userPrompt"`
+	MaxTokens        int     `json:"maxTokens"`
+	Temperature      float64 `json:"temperature"`
 	DryMultiplier    float64 `json:"dryMultiplier"`
 	DryBase          float64 `json:"dryBase"`
 	DryAllowedLength int     `json:"dryAllowedLength"`
-
-	// Repetition penalty. A blunt per-token penalty on tokens that appeared in
-	// the last RepeatLastN tokens. RepeatPenalty <= 1.0 disables it (1.0 = no
-	// penalty). Useful as a fallback for single-token spam that DRY's n-gram
-	// matching may miss. RepeatLastN <= 0 uses the SDK default (64).
-	RepeatPenalty float64 `json:"repeatPenalty"`
-	RepeatLastN   int     `json:"repeatLastN"`
-
-	// FrequencyPenalty penalizes a token proportionally to how often it has
-	// already appeared, directly discouraging a word that keeps recurring.
-	// PresencePenalty applies a flat penalty to any token that appeared at
-	// least once. Both default to 0 (disabled).
+	RepeatPenalty    float64 `json:"repeatPenalty"`
+	RepeatLastN      int     `json:"repeatLastN"`
 	FrequencyPenalty float64 `json:"frequencyPenalty"`
 	PresencePenalty  float64 `json:"presencePenalty"`
 }
 
 // CategorizePrompt holds prompt configuration for description categorization.
 type CategorizePrompt struct {
-	SystemPrompt string  `json:"systemPrompt"`
-	UserPrompt   string  `json:"userPrompt"`
-	MaxTokens    int     `json:"maxTokens"`
-	Temperature  float64 `json:"temperature"`
+	SystemPrompt     string  `json:"systemPrompt"`
+	UserPrompt       string  `json:"userPrompt"`
+	MaxTokens        int     `json:"maxTokens"`
+	Temperature      float64 `json:"temperature"`
+	DryMultiplier    float64 `json:"dryMultiplier"`
+	DryBase          float64 `json:"dryBase"`
+	DryAllowedLength int     `json:"dryAllowedLength"`
+	RepeatPenalty    float64 `json:"repeatPenalty"`
+	RepeatLastN      int     `json:"repeatLastN"`
+	FrequencyPenalty float64 `json:"frequencyPenalty"`
+	PresencePenalty  float64 `json:"presencePenalty"`
 }
 
 // ImageConfig holds image preprocessing settings.
@@ -135,7 +127,7 @@ type Config struct {
 	Vision           VisionModelConfig     `json:"visionModel"`
 	Embed            EmbedModelConfig      `json:"embedModel"`
 	Categorize       CategorizeModelConfig `json:"categorizeModel"`
-	Prompt           VisionPrompt          `json:"prompt"`
+	DescribePrompt   VisionPrompt          `json:"prompt"`
 	CategorizePrompt CategorizePrompt      `json:"categorizePrompt"`
 	Image            ImageConfig           `json:"image"`
 }
@@ -190,7 +182,7 @@ func Defaults() Config {
 			CacheTypeK:    "Q8_0",
 			CacheTypeV:    "Q8_0",
 		},
-		Prompt: VisionPrompt{
+		DescribePrompt: VisionPrompt{
 			SystemPrompt:     "You extract image keywords for semantic search.",
 			UserPrompt:       "Describe this image in detail. Include: objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.",
 			MaxTokens:        300,
@@ -211,9 +203,13 @@ func Defaults() Config {
 				"Create useful synonym or related search phrases.\n" +
 				"Cover different aspects of the image: main subjects, secondary objects, actions, setting, colors, materials, style, mood, text, and context.\n" +
 				"Drop filler words.\n",
-			UserPrompt:  "Extract semantic search expressions from this image description:",
-			MaxTokens:   300,
-			Temperature: 0.3,
+			UserPrompt:       "Extract semantic search expressions from this image description:",
+			MaxTokens:        300,
+			Temperature:      0.3,
+			DryMultiplier:    1.05,
+			DryBase:          1.75,
+			DryAllowedLength: 2,
+			FrequencyPenalty: 0.5,
 		},
 		Image: ImageConfig{
 			MaxSide: 512,
