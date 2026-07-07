@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -484,7 +483,7 @@ func (s *Service) Search(ctx context.Context, folderPath string, query string, k
 	results := search.FindTopK(queryVec, searchEntries, k)
 
 	for _, img := range results {
-		s.log(ctx, "--"+filepath.Base(img.Path), "aggregate score", img.Score, "expressions scores", logScores(img.ExpressionScores))
+		s.log(ctx, "--"+filepath.Base(img.Path), "aggregate score", img.Score, "expressions scores", img.ExpressionScores)
 	}
 	s.log(ctx, "::::::::::::")
 
@@ -581,23 +580,4 @@ func isImageExt(ext string) bool {
 		return true
 	}
 	return false
-}
-
-type kv struct {
-	key   string
-	value float32
-}
-
-func logScores(m map[string]float32) []kv {
-
-	var pairs []kv
-	for k, v := range m {
-		pairs = append(pairs, kv{"\n\t\t" + k, v})
-	}
-
-	sort.Slice(pairs, func(i, j int) bool {
-		return pairs[i].value > pairs[j].value // descending order
-	})
-
-	return pairs
 }

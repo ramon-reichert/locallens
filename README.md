@@ -64,3 +64,9 @@ Getting relevant results from *small* local models takes more than embedding the
 ![searching_images](https://github.com/ramon-reichert/locallens/blob/e5a84456d2209fbd89411aed09c54fd13ffe89dd/assets/search_images.gif)
 
 
+## Copyright
+
+Copyright (C) 2026 Ramon Thier Reichert
+
+This project is licensed under the GNU General Public License v3.0.
+See the LICENSE file for details.

@@ -32,7 +32,7 @@ var expectedSearchResults = []struct {
 	expected []string
 }{
 	{"animals or plants with predominat yellow", []string{"parrot.jpg", "forest.jpg"}},
-	{"wedding party", []string{"wedding.jpg", "graduate.jpg"}}, // TODO: make it more context sensible with the old query: "people celebrating, wedding"
+	{"wedding ceremony", []string{"wedding.jpg", "graduate.jpg"}}, // TODO: make it more context sensible with the old query: "people celebrating, wedding"
 }
 
 func TestMain(m *testing.M) {

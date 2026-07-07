@@ -1,7 +1,6 @@
 # To-do:
 
 - Licensing?
-- Adjust scores logging
 - Check possible use of system prompt caching for vision and chat models
 
 - Check "per-request allocation" error with vulkan (and maybe other processors) -> T-019dfff7-3572-72cc-bede-689295bad366

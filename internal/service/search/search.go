@@ -19,7 +19,7 @@ type Result struct {
 	Score       float32
 	// ExpressionScores holds the per-expression cosine similarity to the query, keyed by
 	// expression name. Useful for auditing why an image ranked where it did.
-	ExpressionScores map[string]float32
+	ExpressionScores []scoredExpressions
 }
 
 // Entry represents a searchable item with one embedding vector per expression.
@@ -27,30 +27,6 @@ type Entry struct {
 	Path        string
 	Description string
 	Expressions []ExpressionVector
-}
-
-// aggregate combines per-expression similarity scores into a single image score.
-// The most proeminent score is amplified over the mean.
-func aggregate(scores []float32) float32 {
-	if len(scores) == 0 {
-		return 0
-	}
-	//maximum score:
-	max := scores[0]
-	for _, v := range scores[1:] {
-		if v > max {
-			max = v
-		}
-	}
-
-	//mean score:
-	var total float32
-	for _, s := range scores {
-		total += s
-	}
-	mean := total / float32(len(scores))
-
-	return (mean * 0.5) + (max * 0.5) // This rate defines the search specialization
 }
 
 // FindTopK finds the top-k images most similar to the query vector. Each image
@@ -65,18 +41,18 @@ func FindTopK(query []float32, entries []Entry, k int) []Result {
 
 	for _, entry := range entries {
 		expressionScores := make(map[string]float32, len(entry.Expressions))
-		scores := make([]float32, 0, len(entry.Expressions))
 		for _, fv := range entry.Expressions {
 			s := CosineSimilarity(query, fv.Vector)
 			expressionScores[fv.Expression] = s
-			scores = append(scores, s)
 		}
+
+		topScores, topExpr := sortExpressions(expressionScores)
 
 		results = append(results, Result{
 			Path:             entry.Path,
 			Description:      entry.Description,
-			Score:            aggregate(scores),
-			ExpressionScores: expressionScores,
+			Score:            aggregate(topScores),
+			ExpressionScores: topExpr,
 		})
 	}
 
@@ -109,4 +85,58 @@ func CosineSimilarity(a, b []float32) float32 {
 	}
 
 	return float32(dot / (math.Sqrt(normA) * math.Sqrt(normB)))
+}
+
+type scoredExpressions struct {
+	expr  string
+	score float32
+}
+
+// sortExpressions sort the expressions by score and keep just the top n
+func sortExpressions(m map[string]float32) ([]float32, []scoredExpressions) {
+	n := 5
+	cut := min(n, len(m))
+	var scExp []scoredExpressions
+	for k, v := range m {
+		scExp = append(scExp, scoredExpressions{k, v})
+	}
+
+	sort.Slice(scExp, func(i, j int) bool {
+		return scExp[i].score > scExp[j].score // descending order
+	})
+
+	var topScores []float32
+	var sorted []scoredExpressions
+	for i := 0; i < cut; i++ {
+		sorted = append(sorted, scoredExpressions{"\n\t\t" + scExp[i].expr, scExp[i].score}) //adjust for logging
+		topScores = append(topScores, scExp[i].score)                                        //collect top scores
+	}
+
+	if len(m) > n {
+		sorted = append(sorted, scoredExpressions{"\n\texpressions below were discarded", float32(len(m) - n)})
+		for i := cut; i < len(m); i++ {
+			sorted = append(sorted, scoredExpressions{"\n\t\t" + scExp[i].expr, scExp[i].score})
+		}
+	}
+
+	return topScores, sorted
+}
+
+// aggregate combines per-expression similarity scores into a single image score.
+// The most proeminent score is amplified over the mean.
+func aggregate(scores []float32) float32 {
+	if len(scores) == 0 {
+		return 0
+	}
+
+	max := scores[0]
+
+	//mean score:
+	var total float32
+	for _, s := range scores {
+		total += s
+	}
+	mean := total / float32(len(scores))
+
+	return (mean * 0.5) + (max * 0.5) // This rate defines the search specialization
 }

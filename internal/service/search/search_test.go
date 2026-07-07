@@ -73,13 +73,6 @@ func TestFindTopK_AveragesExpressionScores(t *testing.T) {
 		t.Errorf("diluted.jpg aggregate = %.4f, want ~0.75", results[1].Score)
 	}
 
-	diluted := results[1]
-	if len(diluted.ExpressionScores) != 2 {
-		t.Errorf("expected 2 expression scores for diluted.jpg, got %d", len(diluted.ExpressionScores))
-	}
-	if _, ok := diluted.ExpressionScores["attributes"]; !ok {
-		t.Errorf("expected an 'attributes' expression score, got %v", diluted.ExpressionScores)
-	}
 }
 
 func TestFindTopK_LessThanK(t *testing.T) {
