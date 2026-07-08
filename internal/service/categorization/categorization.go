@@ -98,7 +98,6 @@ func (c *Categorizer) Load(ctx context.Context) error {
 		model.WithNUBatch(e.NUBatch),
 		model.WithCacheTypeK(model.GGMLType(config.ParseGGMLType(e.CacheTypeK))),
 		model.WithCacheTypeV(model.GGMLType(config.ParseGGMLType(e.CacheTypeV))),
-		model.WithIncrementalCache(false),
 	)
 	if err != nil {
 		return fmt.Errorf("load categorization model: %w", err)

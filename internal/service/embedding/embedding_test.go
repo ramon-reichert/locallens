@@ -13,7 +13,7 @@ func TestEmbed_NotLoaded(t *testing.T) {
 		Log: logger.Discard(),
 	})
 
-	_, err := e.Embed(context.Background(), "any text")
+	_, err := e.Embed(context.Background(), embedding.Document, "any text")
 	if err != embedding.ErrModelNotLoaded {
 		t.Errorf("expected ErrModelNotLoaded, got %v", err)
 	}

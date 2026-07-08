@@ -21,7 +21,7 @@ import (
 
 const (
 	indexFileName        = ".locallens.index"
-	describeImageTimeout = 2 * time.Minute
+	describeImageTimeout = 4 * time.Minute
 	categorizeTimeout    = 2 * time.Minute
 	embedTimeout         = 1 * time.Minute
 )
@@ -417,7 +417,7 @@ func (s *Service) embedExpressions(ctx context.Context, expressions categorizati
 			continue
 		}
 		embedCtx, embedCancel := context.WithTimeout(ctx, embedTimeout)
-		embedResult, err := s.embedder.Embed(embedCtx, expression)
+		embedResult, err := s.embedder.Embed(embedCtx, embedding.Document, expression)
 		embedCancel()
 		if err != nil {
 			return nil, 0, fmt.Errorf("embed expression %q: %w", expression, err)
@@ -447,7 +447,7 @@ func (s *Service) Search(ctx context.Context, folderPath string, query string, k
 	s.log(ctx, "search images", "folder", folderPath, "top k", k, "query", query)
 
 	embedCtx, embedCancel := context.WithTimeout(ctx, embedTimeout)
-	embedResult, err := s.embedder.Embed(embedCtx, query)
+	embedResult, err := s.embedder.Embed(embedCtx, embedding.Query, query)
 	embedCancel()
 	if err != nil {
 		return nil, fmt.Errorf("embed query: %w", err)

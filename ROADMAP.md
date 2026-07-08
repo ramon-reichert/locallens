@@ -1,15 +1,12 @@
 # To-do:
 
-- Licensing?
-- Check possible use of system prompt caching for vision and chat models
+- Make a new release
 
 - Check "per-request allocation" error with vulkan (and maybe other processors) -> T-019dfff7-3572-72cc-bede-689295bad366
   - last kronk version before the bug is v1.24.8, with Llama.cpp pinned to version b9247 for compatibility.
   - Possible fix committed in local branch "vulkan_bug" in both kronk AND locallens repos.
   - Until the bug is fixed, will move on with processor=CPU only.
   - Now running with kronk v1.28.3 and llama.cpp v9750, LocalLens managed to describe 5 images before breaking with the vulkan error;
-
-- Look for suggested model config values at the model provider sites, or test other models > https://chatgpt.com/c/6a04c226-7d9c-83e9-86ae-7f8743cea1ec ;
 
 - Search for "TODO" along the codebase;
 

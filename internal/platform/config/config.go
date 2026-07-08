@@ -168,7 +168,7 @@ func Defaults() Config {
 			CacheTypeV:    "Q8_0",
 		},
 		Embed: EmbedModelConfig{
-			ContextWindow:  2048, // TODO: Check this config at model provider site
+			ContextWindow:  2048,
 			NBatch:         2048,
 			NUBatch:        512,
 			CacheTypeK:     "Q8_0",
@@ -176,15 +176,15 @@ func Defaults() Config {
 			FlashAttention: true,
 		},
 		Categorize: CategorizeModelConfig{
-			ContextWindow: 4096, // room for the prose description plus the JSON expressions
+			ContextWindow: 4096,
 			NBatch:        2048,
-			NUBatch:       512,
+			NUBatch:       1024,
 			CacheTypeK:    "Q8_0",
 			CacheTypeV:    "Q8_0",
 		},
 		DescribePrompt: VisionPrompt{
 			SystemPrompt:     "You extract image keywords for semantic search.",
-			UserPrompt:       "Describe this image in detail. Include: objects, people, background, colors, actions, visible text and overall context. Be descriptive and precise.",
+			UserPrompt:       "Describe this image in detail. Include: objects, people, background, colors, actions, visible text and overall context.",
 			MaxTokens:        300,
 			Temperature:      0.1,
 			DryMultiplier:    3.0,
@@ -197,7 +197,8 @@ func Defaults() Config {
 		CategorizePrompt: CategorizePrompt{ // TODO: check if this prompt can be cached
 			SystemPrompt: "You turn an image description into compact semantic search expressions. " +
 				"Reply with a JSON object with one key, \"expressions\", whose value is an array of strings.\n" +
-				"Return 15 expressions with 2 to 6 words long. Prefer short noun phrases, action phrases, setting phrases, and attribute phrases.\n" +
+				"Return 15 serachable expressions. Prefer short noun phrases, action phrases, setting phrases, and attribute phrases.\n" +
+				"Avoid complete sentences, and do not exceed 6 words long.\n" +
 				"Preserve relationships when possible, such as subject-action, object-location, color-object, and style-subject.\n" +
 				"Avoid isolated single words unless they are distinctive names, visible text, species, landmarks, or unique objects.\n" +
 				"Create useful synonym or related search phrases.\n" +

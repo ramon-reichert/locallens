@@ -20,6 +20,17 @@ var (
 	ErrEmptyText      = errors.New("empty text")
 )
 
+// Kind identifies the retrieval role of text being embedded.
+type Kind string
+
+const (
+	Document Kind = "document"
+	Query    Kind = "query"
+
+	documentPrefix = "task: search result | document: "
+	queryPrefix    = "task: search result | query: "
+)
+
 // Embedder manages the embedding model for text vectorization.
 type Embedder struct {
 	log   logger.Logger
@@ -73,7 +84,6 @@ func (e *Embedder) Load(ctx context.Context) error {
 		model.WithCacheTypeK(model.GGMLType(config.ParseGGMLType(em.CacheTypeK))),
 		model.WithCacheTypeV(model.GGMLType(config.ParseGGMLType(em.CacheTypeV))),
 		model.WithFlashAttention(fa),
-		model.WithIncrementalCache(false),
 	)
 	if err != nil {
 		return fmt.Errorf("load embedding model: %w", err)
@@ -117,8 +127,8 @@ type EmbedResult struct {
 	Elapsed   time.Duration
 }
 
-// Embed converts text into a vector embedding.
-func (e *Embedder) Embed(ctx context.Context, text string) (EmbedResult, error) {
+// Embed converts text into a vector embedding using the prompt prefix for kind.
+func (e *Embedder) Embed(ctx context.Context, kind Kind, text string) (EmbedResult, error) {
 	e.mu.Lock()
 	krn := e.krn
 	e.mu.Unlock()
@@ -131,8 +141,13 @@ func (e *Embedder) Embed(ctx context.Context, text string) (EmbedResult, error) 
 		return EmbedResult{}, ErrEmptyText
 	}
 
+	input := documentPrefix + text
+	if kind == Query {
+		input = queryPrefix + text
+	}
+
 	data := model.D{
-		"input":    text,
+		"input":    input,
 		"truncate": true,
 	}
 

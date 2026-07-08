@@ -31,7 +31,7 @@ var expectedSearchResults = []struct {
 	query    string
 	expected []string
 }{
-	{"animals or plants with predominat yellow", []string{"parrot.jpg", "forest.jpg"}},
+	{"animal with predominat yellow", []string{"parrot.jpg", "forest.jpg"}},
 	{"wedding ceremony", []string{"wedding.jpg", "graduate.jpg"}}, // TODO: make it more context sensible with the old query: "people celebrating, wedding"
 }
 
