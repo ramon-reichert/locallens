@@ -10,8 +10,8 @@ local models (all via the Kronk SDK):
 3. An **embedding model** (embeddinggemma-300m) vectorizes each expression
    individually, giving one vector per expression.
 
-Search embeds the query and ranks images by aggregating cosine similarity
-across every expression vector. Everything runs locally — no cloud APIs.
+Search embeds the query, scores it against every expression vector, and ranks
+images from each image's best expression matches. Everything runs locally — no cloud APIs.
 
 ## Project structure (Package Oriented Design)
 
@@ -247,7 +247,7 @@ so disabled knobs fall back to SDK defaults.
 
 ```go
 data := model.D{
-    "input":    text,
+    "input":    prefixedText,
     "truncate": true,
 }
 resp, err := krn.Embeddings(ctx, data)
@@ -255,7 +255,10 @@ vector := resp.Data[0].Embedding  // []float32
 ```
 
 Each image produces up to 15 embeddings (one per expression); the query
-produces one. embeddinggemma is ~ms per call, so the extra embeds are negligible.
+produces one. LocalLens prefixes indexed expressions as retrieval documents
+(`task: search result | document: ...`) and user searches as retrieval queries
+(`task: search result | query: ...`) before calling Kronk. embeddinggemma is
+~ms per call, so the extra embeds are negligible.
 
 ### Model lifecycle
 
@@ -356,7 +359,7 @@ service.IndexFolder(ctx, folderPath, progress):
     → tracker.record(...)                  # Progress callback (SSE event)
 
 service.Search(ctx, folderPath, query, k):
-  → embedding.Embed(ctx, query)          # Query text → single vector
+  → embedding.Embed(ctx, embedding.Query, query) # Prefixed query text → single vector
   → loadIndex(folderPath)                # Cached after first call; disk hit
                                          # only on cache miss
   → search.FindTopK(queryVec, entries, k)# Multi-vector cosine + aggregate ranking
@@ -390,30 +393,35 @@ as an audit trail (prose → expressions → vectors).
 ### Multi-vector index
 
 `index.Entry` stores `Embeddings []ExpressionEmbedding` — **one vector per
-expression** (max 15), not one vector per image. This costs ~15× embeds at
-index time and ~15× cosines at search time, but embeddinggemma is fast and
-folders are small, so it is negligible. Entries with `len(Embeddings) == 0` are
-treated as "not indexed" and re-index automatically after the gob format
-changed — no manual `.locallens.index` cleanup needed.
+expression** (max 15), not one vector per image. Expressions are embedded as
+retrieval documents via `embedding.Embed(ctx, embedding.Document, expression)`;
+search queries use `embedding.Query`. This costs ~15× embeds at index time and
+~15× cosines at search time, but embeddinggemma is fast and folders are small,
+so it is negligible. Entries with `len(Embeddings) == 0` are treated as "not
+indexed" and re-index automatically after the gob format changed — no manual
+`.locallens.index` cleanup needed.
 
 ### Aggregate ranking (`search.aggregate`)
 
 `FindTopK` computes the query's cosine similarity against **every** expression
-vector of an image, records each per-expression score in
-`Result.ExpressionScores` (for auditing why an image ranked where it did), then
-combines them into one image score:
+vector of an image, sorts those scores, keeps the **top 5** expression scores,
+records the sorted per-expression scores in `Result.ExpressionScores` (for
+auditing why an image ranked where it did), then combines the top scores into
+one image score:
 
 ```go
-aggregate(scores) = mean*0.5 + max*0.5
+topScores = best 5 expression similarities for the image
+aggregate(topScores) = mean(topScores)*0.5 + max(topScores)*0.5
 ```
 
-This `0.5/0.5` split is the tested tradeoff and the tunable "search
+Using only the top 5 prevents low-scoring unrelated expressions from diluting a
+good match. The `0.5/0.5` split is the tested tradeoff and the tunable "search
 specialization" knob:
 - **Pure sum** (first attempt) rewarded images that simply populate more
   expressions, hurting precision (a richly-described image outranks a precise
   2-expression match).
-- **Pure mean** (second attempt) fixed that but under-weighted a single strong
-  match diluted by unrelated expressions.
+- **Pure mean over all expressions** (second attempt) fixed that but
+  under-weighted a single strong match diluted by unrelated expressions.
 - **`mean*0.5 + max*0.5`** (current) keeps a strong single-expression match
   relevant (via `max`) while still rewarding broad coverage (via `mean`).
   A UI knob to expose this rate is on the roadmap.

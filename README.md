@@ -26,13 +26,13 @@ With these pieces, LocalLens can index a folder of images, describe each image l
 
 ## How LocalLens builds good search vectors
 
-Getting relevant results from *small* local models takes more than embedding the raw description. Aside from Kronk itself, this pipeline and its ranking are what make LocalLens interesting:
+Getting relevant results from *small* local models takes more than embedding a raw image description. LocalLens uses a multi-vector pipeline:
 
-- **Describe, then distill.** The vision model writes a free-form paragraph about each image. Embedding that whole paragraph into a single vector blends many unrelated concepts together and matches queries poorly. So a second, tiny model reshapes the paragraph into a short list of **self-contained “search expressions”** — a dozen or so 2–6 word phrases like *“bright yellow parrot”* or *“dense tropical forest”*. Each phrase is a clean, focused unit to embed.
+- **Describe, then distill.** A vision model describes each image, then a tiny chat model turns that description into short, self-contained **search expressions** such as *“bright yellow parrot”* or *“dense tropical forest”*.
 
-- **One vector per expression.** Instead of a single vector per image, LocalLens stores one embedding per expression. A query then matches against each expression individually, so a precise match on one aspect of an image isn’t drowned out by everything else in the picture.
+- **One vector per expression.** LocalLens embeds each expression separately, so a query can match one precise detail without being diluted by unrelated content in the same image.
 
-- **Ranking that balances precision and coverage.** At search time, each image’s score combines the **average** similarity across its expressions with its **single best** matching expression (a 50/50 blend). Pure averaging under-weights a strong, specific match; pure “best match” rewards noise. Blending the two keeps sharp, specific matches near the top while still favoring images that fit the query on multiple fronts. This balance was arrived at by testing sum-, mean-, and max-based ranking, and is a knob that can be tuned toward broader or more specialized results.
+- **Top-expression ranking.** At search time, `FindTopK` scores every expression against the query, keeps the **5 best-scoring expressions** for each image, and builds the image score from those top matches. The final score blends their mean similarity with the single best expression score, keeping precise matches high while still rewarding images that match the query in several ways.
 
 ## How to Use LocalLens
 

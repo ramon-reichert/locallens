@@ -36,25 +36,26 @@
 
 # Performance and configs
 
-- Goals:      | accurate image description | fast description process | low hardware demand |
-              |-----------------------------------------------------------------------------|
-    Needs     | outTok > 200               | small maxSize            | small model and cfgs|
-  Constrains  | min viable maxSize         | outToks > 200            | KV cache = Q8_0     |
+| Goal | Current decision | Reason / constraint |
+|---|---|---|
+| Accurate image descriptions | Keep vision output as natural prose, `maxTokens=300`, `temperature=0.1`, image `maxSide=512` | Qwen2-VL-2B describes best in prose. Good descriptions need ~200–250 output tokens, but >300 is unnecessary. Low temperature keeps the same image more repeatable. 512px preserves text/context/small details better than lower sizes. |
+| Searchable vectors | Add Qwen3-0.6B categorization after the vision description | Embedding one long prose blob mixes too many concepts. The categorizer turns prose into short 2–6 word search expressions so each concept gets its own vector. This also demonstrates Kronk chat + grammar-constrained JSON with a tiny specialized model. |
+| Ranking quality | Store ~15 expression vectors per image; `FindTopK` scores all expressions, keeps the top 5, then ranks by `mean(top5)*0.5 + max(top5)*0.5` | Top-5 avoids low-scoring unrelated expressions diluting the image score. The 50/50 mean/max blend balances broad query coverage with one strong precise match. This rate is the future “search specialization” knob. |
+| Embedding quality | Prefix indexed expressions as documents and search text as queries | EmbeddingGemma is retrieval-oriented. `task: search result | document:` is used for stored expressions and `task: search result | query:` for user searches. |
+| Low hardware demand | Use the smallest viable models and conservative batch sizes; keep CPU as safe fallback | Target machine can be as small as 8 GB RAM. Vulkan/iGPU may be worse than CPU on low-memory machines, so CPU-only remains the safest fallback until backend selection is more robust. |
+| Stable vision attention | Keep Qwen2-VL KV cache at `Q8_0/Q8_0` | KV precision is independent of model weight precision. Qwen2-VL’s GQA amplifies K-cache quantization noise; Q4_0 caused hallucinations. V cache is more tolerant, but Q8_0/Q8_0 is the pragmatic safe default. |
+| Anti-repetition | Use DRY + repeat/frequency/presence penalties as request parameters | Hallucinated loops were more common with lower KV precision and text-heavy images. DRY breaks repeated multi-token phrases without suppressing normal repeated words. |
 
-### Considerations:
+### Decision notes
 
-- Many outToks(≈250) are needed to get good descriptions(IT IS A MUST), but there is no need for more than maxTok=300;
-- But actually verbose descriptions alone cannot guarantee good vectors. Need to explore more what kind of descriptions can generate good vectors, and then try to enforce them through prompt or using grammar. 
-- I found before that format restrictive prompts were preventing the model to "talk", but I need to ensure that the cause was not bad configuration.
+- Restrictive/structured vision prompts were rejected. The tiny vision model performs better when asked for natural language; forcing rigid output asks too much from Qwen2-VL-2B.
+- System prompts are important, especially for the chat categorizer, but they must be clear and not overly complex or the model stops obeying them.
+- Separate per-category vision prompts are no longer a priority. Kronk IMC exists and is enabled by default, but the categorizer now handles the specialized extraction work.
+- Qwen3 categorizer uses `enable_thinking=false` and grammar-constrained JSON. This avoids `<think>` blocks and makes parsing reliable.
+- Categorizer temperature is `0.3`: enough variation to create synonyms/related expressions without making the output too unstable.
+- Embedding existing descriptions directly produced bad search similarity; the extra categorization step increases indexing time but produces much better results.
 
-- Temperature is set to 0.1 because we want: "same description to same image" every time;
-- Can we have more predictable descriptions using a system prompt? YES, THEY SEEM TO BE MORE CONCISE. Can be re-evaluated after search tests.
-- Can we achieve more detailed descriptions sending separated prompts for each category(people characteristics, actions, etc)? Need to see if message caching works for images in the newer Kronk versions.
-
-- Recent tests show similar inference times for maxSide= 128, 256 and 384px : ~16 seconds/image. 512px increased this time a little ~20sec
-- maxSide=512px provide more precise descriptions (text, context, small details). 384px it is the minimum from now! I also set Quality image enconding to 100%.
-- A test with this prompt - "Did you load an image? Just say yes or no." - shows the time to "load" the image: 62px - 2,2s | 384px - 11,3s - Maybe there is a metric for that.
-- Now that is a metric: ttft - time to first token - but now that is not the bottleneck of inference time anymore. The description appropriate for a good embedding will be the most important thing.
+- Recent tests show similar inference times for maxSide= 128, 256 and 384px : ~16 seconds/image. The choosen 512px increased this time a little ~20sec, but allows describing detailed and text-populated images. I also set Quality image enconding to 100%.
 
 - Big image maxSize(>384px) and restrictive/demanding prompts can cause model to fail responses when running with limited hardware, as mine. These two factors showed up to play a higher role in performance than model configs(considering viable values, at least) as cxtWindow, Nbatch and NUbatch.
 - Thanks to changes made to allow track yzma mtmd.HelperEvalChunks return codes, it is possible to see that big image maxSize(768, sometimes even 512) can cause a prefill error, KV_cache_full, totally corrupting the response;
@@ -69,7 +70,7 @@
 
 - inToks is always the same, despite model config and image maxSize? Maybe it is related with the prompt? YES, with the prompt AND image size.
 
-- Until now, we reached avg description times of 24sec/img(CPU only, 8GB RAM) and 7sec/img(6GB VRAM GPU, 32GB RAM) with good descriptions, but bad search similarity;
+- Until now, we reached avg description times of 24sec/img(CPU only, 8GB RAM) and 7sec/img(6GB VRAM GPU, 32GB RAM) with good descriptions, but bad search similarity; > Adding the categorization step increased avg time to 1min/image(CPU only, 8GB RAM), but it worth because the search is pretty good now.
 
 
 
