@@ -1,18 +1,18 @@
 # To-do:
 
-- Make a new release
+- Review and correct indexing/searching recursiveness code; Add recursiveness test too;
+- Add search by name to the folders browser;
+- Provide search "specialization" knob/bar in the UI that changes the mean/max rate at search/aggregate() 
 
 - Check "per-request allocation" error with vulkan (and maybe other processors) -> T-019dfff7-3572-72cc-bede-689295bad366
   - last kronk version before the bug is v1.24.8, with Llama.cpp pinned to version b9247 for compatibility.
   - Possible fix committed in local branch "vulkan_bug" in both kronk AND locallens repos.
   - Until the bug is fixed, will move on with processor=CPU only.
-  - Now running with kronk v1.28.3 and llama.cpp v9750, LocalLens managed to describe 5 images before breaking with the vulkan error;
+  - Now running with kronk v1.28.6 and llama.cpp v9750, LocalLens managed to describe 5 images before breaking with the vulkan error;
 
 - Search for "TODO" along the codebase;
 
-- Review and correct indexing/searching recursiveness code; Add recursiveness test too;
-- Add search by name to the folders browser;
-- Provide search "specialization" knob/bar in the UI that changes the mean/max rate at search/aggregate() 
+
 
 # Future features
 
